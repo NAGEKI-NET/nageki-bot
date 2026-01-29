@@ -147,9 +147,38 @@ class RatingDataProcessor:
         profile = await self.api_client.get_profile_with_token(token)
         
         # 使用新的API端点获取三个分类数据（直接返回列表）
-        b50_items = await self.api_client.get_rating_bestlist(token)
-        new10_items = await self.api_client.get_rating_newlist(token)
-        pscore_items = await self.api_client.get_rating_pscorelist(token)
+        b50_items_raw = await self.api_client.get_rating_bestlist(token)
+        new10_items_raw = await self.api_client.get_rating_newlist(token)
+        pscore_items_raw = await self.api_client.get_rating_pscorelist(token)
+        
+        # 规范化字段名（API 返回 difficultId/score，内部使用 level/value）
+        def normalize_item(raw_item, is_pscore=False):
+            """将 API 返回的字段名映射到内部格式"""
+            item = {
+                "musicId": raw_item.get("musicId"),
+                "level": raw_item.get("difficultId", raw_item.get("level", 0)),
+                "value": raw_item.get("score", raw_item.get("value", 0)),
+                "isAllBreak": raw_item.get("isAllBreak", False),
+                "isFullBell": raw_item.get("isFullBell", False),
+                "isFullCombo": raw_item.get("isFullCombo", False),
+                "isPScore": is_pscore,
+            }
+            
+            if is_pscore:
+                item["platinumScoreMax"] = raw_item.get("platinumScoreMax", 0)
+                item["platinumScoreStar"] = raw_item.get("platinumScoreStar", 0)
+            
+            # 如果 API 直接返回了 musicName 和 artistName，暂存起来
+            if raw_item.get("musicName"):
+                item["_apiMusicName"] = raw_item.get("musicName")
+            if raw_item.get("artistName"):
+                item["_apiArtistName"] = raw_item.get("artistName")
+            
+            return item
+        
+        b50_items = [normalize_item(item) for item in b50_items_raw]
+        new10_items = [normalize_item(item) for item in new10_items_raw]
+        pscore_items = [normalize_item(item, is_pscore=True) for item in pscore_items_raw]
         
         # 为每个项目添加音乐信息
         for item in b50_items:
@@ -159,6 +188,14 @@ class RatingDataProcessor:
                 if music_info:
                     item["musicInfo"] = music_info
                     item["fullMusicInfo"] = {"music": music_info}
+                elif item.get("_apiMusicName"):
+                    # 如果缓存中没有，但 API 返回了名称，创建临时 music_info
+                    item["musicInfo"] = {
+                        "id": music_id,
+                        "name": item["_apiMusicName"],
+                        "artistName": item.get("_apiArtistName", "")
+                    }
+                    item["fullMusicInfo"] = {"music": item["musicInfo"]}
         
         for item in new10_items:
             music_id = item.get("musicId")
@@ -167,6 +204,13 @@ class RatingDataProcessor:
                 if music_info:
                     item["musicInfo"] = music_info
                     item["fullMusicInfo"] = {"music": music_info}
+                elif item.get("_apiMusicName"):
+                    item["musicInfo"] = {
+                        "id": music_id,
+                        "name": item["_apiMusicName"],
+                        "artistName": item.get("_apiArtistName", "")
+                    }
+                    item["fullMusicInfo"] = {"music": item["musicInfo"]}
         
         for item in pscore_items:
             music_id = item.get("musicId")
@@ -175,6 +219,13 @@ class RatingDataProcessor:
                 if music_info:
                     item["musicInfo"] = music_info
                     item["fullMusicInfo"] = {"music": music_info}
+                elif item.get("_apiMusicName"):
+                    item["musicInfo"] = {
+                        "id": music_id,
+                        "name": item["_apiMusicName"],
+                        "artistName": item.get("_apiArtistName", "")
+                    }
+                    item["fullMusicInfo"] = {"music": item["musicInfo"]}
         
         # 计算 Rating
         self.calculate_ratings(b50_items)
