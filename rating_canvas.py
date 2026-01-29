@@ -110,39 +110,38 @@ async def generate_rating_canvas_image(
         plugin_dir = os.path.dirname(__file__)
         fonts_dir = os.path.join(plugin_dir, "assets", "fonts")
         
-        # 优先查找内置字体 (假设文件名分别为 regular.ttf 和 bold.ttf，用户需自行放入)
-        # 或者尝试常见的字体文件名
+        # 强制仅使用 Noto Sans SC 字体 (Server 部署专用)
+        # 请确保 assets/fonts 目录下有 NotoSansSC-Regular.ttf 和 NotoSansSC-Bold.ttf
+        # 支持 ttf 和 otf
+        
         font_candidates = []
         
         if bold:
             font_candidates.extend([
-                os.path.join(fonts_dir, "msyhbd.ttc"),
-                os.path.join(fonts_dir, "msyhbd.ttf"),
-                os.path.join(fonts_dir, "SourceHanSansCN-Bold.otf"),
-                os.path.join(fonts_dir, "SourceHanSansCN-Bold.ttf"),
-                "msyhbd.ttc", "msyhbd.ttf", "simheibd.ttf", "arialbd.ttf",
-                "C:/Windows/Fonts/msyhbd.ttc", "C:/Windows/Fonts/arialbd.ttf"
+                os.path.join(fonts_dir, "NotoSansSC-Bold.ttf"),
+                os.path.join(fonts_dir, "NotoSansSC-Bold.otf"),
+                # 兼容 Noto Sans SC Variable (Google Fonts download)
+                os.path.join(fonts_dir, "NotoSansSC-VariableFont_wght.ttf"), 
             ])
         else:
             font_candidates.extend([
-                os.path.join(fonts_dir, "msyh.ttc"),
-                os.path.join(fonts_dir, "msyh.ttf"),
-                os.path.join(fonts_dir, "SourceHanSansCN-Regular.otf"),
-                os.path.join(fonts_dir, "SourceHanSansCN-Regular.ttf"),
-                "msyh.ttc", "msyh.ttf", "simhei.ttf", "arial.ttf",
-                "C:/Windows/Fonts/msyh.ttc", "C:/Windows/Fonts/msyh.ttf",
-                "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc"
+                os.path.join(fonts_dir, "NotoSansSC-Regular.ttf"),
+                os.path.join(fonts_dir, "NotoSansSC-Regular.otf"),
+                os.path.join(fonts_dir, "NotoSansSC-VariableFont_wght.ttf"),
             ])
             
         for path in font_candidates:
             try:
-                # 检查文件是否存在（避免Pillow报错）
-                if os.path.isabs(path) and not os.path.exists(path) and not path.startswith("C:/Windows/Fonts"):
-                     continue
-                     
-                return ImageFont.truetype(path, size)
+                if os.path.exists(path):
+                    # 如果是 Variable Font，通常默认就是 Regular，粗体可能需要指定 index 或 layout_engine
+                    # 但 PIL 对 Variable Font 支持有限，最好是静态字体文件
+                    return ImageFont.truetype(path, size)
             except Exception:
                 continue
+        
+        # 如果找不到指定字体，记录错误并返回默认字体 (虽然这在服务器上可能显示乱码，但防止崩溃)
+        # 实际部署时必需上传字体文件
+        logger.warning(f"[绘图] 未找到 NotoSansSC 字体文件! 请检查 {fonts_dir}")
         return ImageFont.load_default()
     
     title_font = load_font(24, bold=True) # text-2xl
