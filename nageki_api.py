@@ -10,6 +10,13 @@ from urllib.parse import urljoin, urlencode
 logger = logging.getLogger(__name__)
 
 
+class NagekiApiException(Exception):
+    def __init__(self, status: int, message: str, raw_response: str = ""):
+        self.status = status
+        self.message = message
+        self.raw_response = raw_response
+        super().__init__(f"API Error {status}: {message}")
+
 class NagekiApiClient:
     """Nageki-Net API 客户端"""
     
@@ -186,8 +193,19 @@ class NagekiApiClient:
                     if status >= 400:
                         logger.error(f"[Bot API] HTTP错误响应: {status}")
                         logger.error(f"[Bot API] 错误响应体: {response_text}")
-                    
-                    resp.raise_for_status()
+                        
+                        # 尝试解析错误信息
+                        err_msg = f"HTTP Error {status}"
+                        try:
+                            err_json = json.loads(response_text)
+                            if "message" in err_json:
+                                err_msg = err_json["message"]
+                            elif "error" in err_json:
+                                err_msg = err_json["error"]
+                        except:
+                            pass
+                            
+                        raise NagekiApiException(status, err_msg, response_text)
                     
                     # 尝试解析JSON
                     try:
@@ -199,11 +217,15 @@ class NagekiApiClient:
                         logger.error(f"[Bot API] 原始响应: {response_text}")
                         # 如果不是JSON，返回文本内容
                         return {"message": response_text}
+                        
+            except NagekiApiException:
+                raise
             except aiohttp.ClientResponseError as e:
+                # 理论上不会走到这里，因为我们处理了 status >= 400的情况
+                # 但以防万一
                 logger.error(f"[Bot API] HTTP错误: 状态码={e.status}, 消息={e.message}")
                 if e.status == 401:
                     logger.error(f"[Bot API] 认证失败 - 请检查API密钥是否正确")
-                    logger.error(f"[Bot API] 使用的API密钥: {api_key_preview}")
                 raise
             except Exception as e:
                 logger.error(f"[Bot API] 请求异常: {type(e).__name__}: {e}", exc_info=True)

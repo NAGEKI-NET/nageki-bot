@@ -4,7 +4,7 @@ from astrbot.api import logger
 import os
 import aiohttp
 
-from .nageki_api import NagekiApiClient
+from .nageki_api import NagekiApiClient, NagekiApiException
 from .rating_data import RatingDataProcessor
 from .rating_canvas import generate_rating_canvas_image
 
@@ -61,6 +61,13 @@ class NagekiBot(Star):
         # 处理测试命令：test 或 /test
         if message_str == "/test" or message_str == "test":
             yield event.plain_result("在呢")
+        # 处理绑定说明命令
+        elif message_str in ["绑定", "bind", "nageki bind", "nageki 绑定"]:
+             yield event.plain_result(
+                "绑定命令格式：\n"
+                "nageki bind <绑定码>\n\n"
+                "请前往 https://next.nageki-net.com/net/profile 获取绑定码"
+            )
         # 处理绑定命令：nageki bind <绑定码>
         elif message_str.startswith("nageki bind "):
             async for result in self._handle_bind_command(event, message_str):
@@ -139,6 +146,15 @@ class NagekiBot(Star):
             logger.info(f"[绑定命令] 绑定成功: {message}")
             yield event.plain_result(message)
             
+        except NagekiApiException as e:
+            logger.error(f"[绑定命令] API API错误: {e.status} - {e.message}")
+            if e.status == 400:
+                 yield event.plain_result(f"绑定失败：{e.message}")
+            elif e.status == 401:
+                 logger.error(f"[绑定命令] 认证失败 - API密钥可能不正确")
+                 yield event.plain_result(f"认证失败：请检查 BOT_API_KEY 是否正确")
+            else:
+                 yield event.plain_result(f"绑定失败 ({e.status})：{e.message}")
         except aiohttp.ClientResponseError as e:
             logger.error(f"[绑定命令] HTTP错误: 状态码={e.status}, 消息={e.message}")
             if hasattr(e, 'headers'):
