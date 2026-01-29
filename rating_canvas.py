@@ -161,6 +161,28 @@ async def generate_rating_canvas_image(
             return cjk
         return latin
     
+    # 专门加载 MS Gothic 的组，用于确保星星等符号显示
+    def load_ms_gothic_pair(size):
+        plugin_dir = os.path.dirname(__file__)
+        fonts_dir = os.path.join(plugin_dir, "assets", "fonts")
+        font = None
+        # 优先尝试加载 msgothic
+        candidates = ["msgothic.ttc", "msgothic.ttf"]
+        for name in candidates:
+            p = os.path.join(fonts_dir, name)
+            if os.path.exists(p):
+                try:
+                    font = ImageFont.truetype(p, size)
+                    break
+                except Exception:
+                    continue
+                    
+        if font:
+            return (font, font)
+        
+        # 如果找不到，回退到普通逻辑
+        return load_font_pair(size)
+
     title_font = load_font_pair(24, bold=True)
     subtitle_font = load_font_pair(16)
     card_title_font = load_font_pair(15, bold=True)
@@ -170,7 +192,7 @@ async def generate_rating_canvas_image(
     score_font = load_font_pair(15, bold=True)
     badge_font = load_font_pair(11, bold=True)
     rank_font = load_font_pair(48, bold=True)
-    star_font = load_font_pair(12) # 用于星星
+    star_font = load_ms_gothic_pair(12) # 用于星星 (强制 MS Gothic)
     exclam_font = load_font_pair(18, bold=True) # 用于 Badge !   
     # 辅助绘图函数
     def draw_round_rect(x1, y1, x2, y2, radius, fill, outline=None, width=1):
@@ -237,7 +259,7 @@ async def generate_rating_canvas_image(
         header_title = cat_title
         header_subtitle = "BEST " + (cat_title.replace("Best ", "") if "Best" in cat_title else "DATA")
         
-        stat_label = "平均单曲Rating"
+        stat_label = "平均楽曲Rating"
         stat_value = RatingCalculator.format_rating(category.get('averageRating', 0))
         stat_color = text_white
         
@@ -252,7 +274,7 @@ async def generate_rating_canvas_image(
             style_type = 'purple'
             icon_type = 'diamond'
             header_subtitle = "PLATINUM SCORE " + str(len(items))
-            stat_label = "Rating 贡献"
+            stat_label = "Rating 貢献"
             # 计算总 Rating 贡献
             total_rating = RatingCalculator.calculate_total_rating(items)
             stat_value = f"+{total_rating:.2f}"
