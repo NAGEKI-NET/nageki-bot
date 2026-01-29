@@ -110,64 +110,37 @@ async def generate_rating_canvas_image(
         plugin_dir = os.path.dirname(__file__)
         fonts_dir = os.path.join(plugin_dir, "assets", "fonts")
         
-        # 优先使用 assets/fonts 下的 Segoe UI (需用户手动复制)
-        # Fallback 到系统 Noto Sans SC (Linux) 或 Microsoft YaHei (Windows)
+        # 仅使用 assets/fonts 下的用户指定字体
+        # 优先使用 YaHei (msyh.ttc) 因为它支持 CJK，而 Segoe UI 不支持
         
         font_candidates = []
         
         if bold:
             font_candidates.extend([
-                # 1. User bundled Segoe UI (Asset)
+                # 1. YaHei Bold (优先，支持中文)
+                os.path.join(fonts_dir, "msyhbd.ttc"),
+                os.path.join(fonts_dir, "msyhbd.ttf"),
+                # 2. Segoe UI Bold (备选)
                 os.path.join(fonts_dir, "segoeuib.ttf"),
-                os.path.join(fonts_dir, "SegoeUI-Bold.ttf"),
-                
-                # 2. System Segoe UI (Windows only)
-                "segoeuib.ttf",
-                
-                # 3. Fallbacks (Noto Sans SC / YaHei)
-                os.path.join(fonts_dir, "NotoSansSC-Bold.otf"), # Bundled Noto
-                "/usr/share/fonts/opentype/noto/NotoSansSC-Bold.otf",
-                "NotoSansSC-Bold.otf",
-                "msyhbd.ttc",
             ])
         else:
             font_candidates.extend([
-                # 1. User bundled Segoe UI (Asset)
+                # 1. YaHei Regular (优先，支持中文)
+                os.path.join(fonts_dir, "msyh.ttc"),
+                os.path.join(fonts_dir, "msyh.ttf"),
+                # 2. Segoe UI Regular (备选)
                 os.path.join(fonts_dir, "segoeui.ttf"),
-                os.path.join(fonts_dir, "SegoeUI.ttf"),
-                
-                # 2. System Segoe UI (Windows only)
-                "segoeui.ttf",
-                
-                # 3. Fallbacks (Noto Sans SC / YaHei)
-                os.path.join(fonts_dir, "NotoSansSC-Regular.otf"), # Bundled Noto
-                "/usr/share/fonts/opentype/noto/NotoSansSC-Regular.otf",
-                "NotoSansSC-Regular.otf",
-                "msyh.ttc",
             ])
             
         for path in font_candidates:
             try:
-                if os.path.isabs(path) and not os.path.exists(path) and not path.startswith("C:/"):
-                     continue
-                
-                return ImageFont.truetype(path, size)
+                if os.path.exists(path):
+                    return ImageFont.truetype(path, size)
             except Exception:
                 continue
         
-        # 如果都找不到，尝试直接加载字体名
-        try:
-             # Try Segoe UI by name (Windows)
-             return ImageFont.truetype("Segoe UI", size)
-        except:
-             try:
-                 return ImageFont.truetype("Noto Sans SC", size)
-             except:
-                 pass
-            
-        logger.error(f"[绘图] 严重错误: 未找到 Segoe UI 或 Noto Sans SC 字体！")
-        logger.error(f"[绘图] 已尝试以下路径/文件名: {font_candidates}")
-        logger.error(f"[绘图] 请确认服务器已安装 Noto Sans SC 字体。Ubuntu/Debian 可运行: apt install fonts-noto-cjk")
+        logger.error(f"[绘图] 严重错误: 未找到 assets/fonts 下的指定字体！")
+        logger.error(f"[绘图] 请确保 {fonts_dir} 包含 msyh.ttc/segoeui.ttf 等文件")
         logger.warning(f"[绘图] 正在回退到 PIL 默认字体 (此字体不支持中文，会出现乱码)")
         return ImageFont.load_default()
     
