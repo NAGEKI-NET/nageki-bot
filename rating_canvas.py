@@ -128,19 +128,12 @@ async def generate_rating_canvas_image(
              segoe_paths = [os.path.join(fonts_dir, "segoeui.ttf"), os.path.join(fonts_dir, "SegoeUI.ttf")]
              
         # BIZ UD Gothic (CJK Priority)
-        biz_paths = []
-        if bold:
-             biz_paths = [
-                os.path.join(fonts_dir, "BIZ-UDGothicB.ttc"),
-                os.path.join(fonts_dir, "msgothic.ttc"),
-                os.path.join(fonts_dir, "msgothic.ttf")
-             ]
-        else:
-             biz_paths = [
-                os.path.join(fonts_dir, "BIZ-UDGOTHICR.TTC"),
-                os.path.join(fonts_dir, "msgothic.ttc"),
-                os.path.join(fonts_dir, "msgothic.ttf")
-             ]
+        # User requested BIZ-UDGOTHICR.TTC regardless of bold setting
+        biz_paths = [
+            os.path.join(fonts_dir, "BIZ-UDGOTHICR.TTC"),
+            os.path.join(fonts_dir, "msgothic.ttc"),
+            os.path.join(fonts_dir, "msgothic.ttf")
+        ]
              
         font_latin = _load(segoe_paths)
         font_cjk = _load(biz_paths)
