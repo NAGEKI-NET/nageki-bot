@@ -58,20 +58,18 @@ class NagekiBot(Star):
         """处理各种命令"""
         message_str = event.message_str.strip()
         
-        # 处理测试命令：test 或 /test
-        if message_str == "/test" or message_str == "test":
-            yield event.plain_result("在呢")
         # 处理绑定说明命令
-        elif message_str in ["绑定", "bind", "nageki bind", "nageki 绑定"]:
-             yield event.plain_result(
-                "绑定命令格式：\n"
-                "nageki bind <绑定码>\n\n"
-                "请前往 https://next.nageki-net.com/net/profile 获取绑定码"
-            )
-        # 处理绑定命令：nageki bind <绑定码>
-        elif message_str.startswith("nageki bind "):
-            async for result in self._handle_bind_command(event, message_str):
-                yield result
+        if message_str.startswith("nageki bind") or message_str == "nageki 绑定":
+             # 检查是否是帮助命令
+             if message_str == "nageki bind" or message_str == "nageki 绑定":
+                yield event.plain_result(
+                    "绑定命令格式：\n"
+                    "nageki bind <绑定码>\n\n"
+                    "请前往 https://next.nageki-net.com/net/profile 获取绑定码"
+                )
+             else:
+                async for result in self._handle_bind_command(event, message_str):
+                    yield result
         # 处理查询绑定状态命令：nageki check <QQ号>
         elif message_str.startswith("nageki check "):
             async for result in self._handle_check_bind_command(event, message_str):
