@@ -106,8 +106,8 @@ async def generate_rating_canvas_image(
     img = Image.new("RGBA", (width, height), bg_color)
     draw = ImageDraw.Draw(img)
     
-    # 加载字体组 (Latin, CJK_Main, CJK_Fallback)
-    def load_font_group(size: int, bold=False):
+    # 加载字体
+    def load_font_pair(size: int, bold=False):
         plugin_dir = os.path.dirname(__file__)
         fonts_dir = os.path.join(plugin_dir, "assets", "fonts")
         
@@ -120,164 +120,71 @@ async def generate_rating_canvas_image(
                     continue
             return None
 
-        # 1. Segoe UI (Latin)
-        segoe_paths = [os.path.join(fonts_dir, "segoeuib.ttf"), os.path.join(fonts_dir, "SegoeUI-Bold.ttf")] if bold else [os.path.join(fonts_dir, "segoeui.ttf"), os.path.join(fonts_dir, "SegoeUI.ttf")]
-        
-        # 2. BIZ UD Gothic (CJK Main)
-        # 固定使用 Bold 版本，或者根据 bold 参数？用户之前说“无论是否粗体都用BIZ-UDGothicB”
-        # 这里遵循用户“无论是否粗体都用BIZ-UDGothicB.ttc”的要求作为 CJK 主字体
-        biz_paths = [os.path.join(fonts_dir, "BIZ-UDGothicB.ttc")]
-        
-        # 3. MS Gothic (CJK Fallback)
-        ms_paths = [os.path.join(fonts_dir, "msgothic.ttc"), os.path.join(fonts_dir, "msgothic.ttf")]
+        # Segoe UI (Latin Priority)
+        segoe_paths = []
+        if bold:
+             segoe_paths = [os.path.join(fonts_dir, "segoeuib.ttf"), os.path.join(fonts_dir, "SegoeUI-Bold.ttf")]
+        else:
+             segoe_paths = [os.path.join(fonts_dir, "segoeui.ttf"), os.path.join(fonts_dir, "SegoeUI.ttf")]
+             
+        # BIZ UD Gothic (CJK Priority)
+        # User requested BIZ-UDGothicB.ttc regardless of bold setting
+        biz_paths = [
+            os.path.join(fonts_dir, "BIZ-UDGothicB.ttc"),
+            os.path.join(fonts_dir, "msgothic.ttc"),
+            os.path.join(fonts_dir, "msgothic.ttf")
+        ]
              
         font_latin = _load(segoe_paths)
-        font_cjk_main = _load(biz_paths)
-        font_cjk_fallback = _load(ms_paths)
+        font_cjk = _load(biz_paths)
         
-        # 互相作为 Fallback 以防完全缺失
-        if not font_cjk_fallback: font_cjk_fallback = font_cjk_main
-        if not font_cjk_main: font_cjk_main = font_cjk_fallback
-        
-        # 如果连 Latin 都没有，用 CJK
-        if not font_latin: font_latin = font_cjk_main
-        
-        # 最后的保底
-        if not font_latin:
-             logger.error("严重: 未找到任何字体")
-             fallback = ImageFont.load_default()
-             return (fallback, fallback, fallback)
-             
-        return (font_latin, font_cjk_main, font_cjk_fallback)
-        
-    # 字体检测缓存
-    _GLYPH_CACHE = {}
-    _TOFU_CACHE = {}
-
-    def has_glyph(font, char):
-        # 常见空白字符认为存在
-        if char in [' ', '\t', '\n', '\r', '\u3000']:
-            return True
+        # Fallback Logic
+        if not font_latin and font_cjk:
+            font_latin = font_cjk
+        if not font_cjk and font_latin:
+            font_cjk = font_latin
+        if not font_latin and not font_cjk:
+            logger.error(f"[绘图] 严重错误: 未找到任何字体！请检查 assets/fonts 目录。")
+            fallback = ImageFont.load_default()
+            return (fallback, fallback)
             
-        font_id = id(font)
-        if font_id not in _TOFU_CACHE:
-            # 获取一个极大概率不存在的字符的 mask 作为 tofu 参考
-            # 使用 Private Use Area 字符
-            try:
-                _TOFU_CACHE[font_id] = font.getmask('\uE000').tobytes()
-            except Exception:
-                _TOFU_CACHE[font_id] = None
+        return (font_latin, font_cjk)
         
-        cache_key = (font_id, char)
-        if cache_key in _GLYPH_CACHE:
-            return _GLYPH_CACHE[cache_key]
-            
-        try:
-            mask = font.getmask(char)
-            # 如果 mask 大小或内容与 Tofu 不同，则认为支持
-            # 注意：某些字体 Tofu 可能是空的，某些可能是方框
-            # 这里简单比对 bytes
-            has = (mask.tobytes() != _TOFU_CACHE[font_id])
-            _GLYPH_CACHE[cache_key] = has
-            return has
-        except Exception:
-            return False
-
-    def get_char_font(char, font_group):
-        latin, cjk_main, cjk_fallback = font_group
+    def get_font(pair, text):
+        latin, cjk = pair
+        if not latin: return cjk
+        if not cjk: return latin
         
-        # 1. 如果是 Basic Latin (ASCII)，优先 Segoe
-        # 但 Segoe 可能也缺字符? 通常不会。
-        if '\u0000' <= char <= '\u007F':
-            if has_glyph(latin, char): return latin
-            
-        # 2. 否则判断是否 CJK
-        is_cjk = re.search(r'[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff\uff00-\uffef]', char)
-        
-        if is_cjk:
-            # 优先 BIZ
-            if has_glyph(cjk_main, char): return cjk_main
-            # 其次 MS Gothic
-            if has_glyph(cjk_fallback, char): return cjk_fallback
-            # 如果都没有，回退到 Latin (可能显示方框)
-            return latin
-        else:
-            # 非 CJK 字符 (如特殊符号)，优先 Segoe，然后 BIZ，然后 MS
-            if has_glyph(latin, char): return latin
-            if has_glyph(cjk_main, char): return cjk_main
-            if has_glyph(cjk_fallback, char): return cjk_fallback
-            
-        return cjk_main # 默认还是给 Main
-
-    def draw_text_fallback(xy, text, fill, font_group, anchor=None):
-        if not text: return
-        x, y = xy
-        
-        # 目前只支持简单的单行左对齐绘制，不支持 anchor (除了默认 lt)
-        # 如果 text 包含不支持的字符，逐字绘制
-        
-        # 优化：如果整段文本都能用首选字体，则一次性绘制
-        # 这对于纯英文或纯日文会快很多
-        
-        # 简单起见，且为了完美 Fallback，这里逐字绘制 (Visual 效果最好)
-        # 但要注意性能。如果性能必须优化，可以分段。
-        # 这里的 text 通常很短。
-        
-        current_x = x
-        for char in text:
-            f = get_char_font(char, font_group)
-            draw.text((current_x, y), char, fill=fill, font=f)
-            current_x += f.getlength(char)
-            
-    def get_text_width_fallback(text, font_group):
-        if not text: return 0
-        w = 0
-        for char in text:
-            f = get_char_font(char, font_group)
-            w += f.getlength(char)
-        return w
-
-    title_font = load_font_group(24, bold=True)
-    subtitle_font = load_font_group(16)
-    card_title_font = load_font_group(15, bold=True)
-    label_font = load_font_group(14)
-    artist_font = load_font_group(11)
-    rating_font = load_font_group(13, bold=True)
-    score_font = load_font_group(15, bold=True)
-    badge_font = load_font_group(11, bold=True)
-    rank_font = load_font_group(48, bold=True)
-    star_font = load_font_group(12) 
-    exclam_font = load_font_group(18, bold=True)
+        text_str = str(text)
+        # Check for CJK characters (Punctuation, Hiragana, Katakana, Han, Fullwidth)
+        if re.search(r'[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff\uff00-\uffef]', text_str):
+            return cjk
+        return latin
     
+    title_font = load_font_pair(24, bold=True)
+    subtitle_font = load_font_pair(16)
+    card_title_font = load_font_pair(15, bold=True)
+    label_font = load_font_pair(14)
+    artist_font = load_font_pair(11)
+    rating_font = load_font_pair(13, bold=True)
+    score_font = load_font_pair(15, bold=True)
+    badge_font = load_font_pair(11, bold=True)
+    rank_font = load_font_pair(48, bold=True)
+    star_font = load_font_pair(12) # 用于星星
+    exclam_font = load_font_pair(18, bold=True) # 用于 Badge !   
     # 辅助绘图函数
     def draw_round_rect(x1, y1, x2, y2, radius, fill, outline=None, width=1):
         draw.rounded_rectangle([x1, y1, x2, y2], radius=radius, fill=fill, outline=outline, width=width)
     
-    def truncate_text(text, max_width, font_group):
+    def truncate_text(text, max_width, font_pair):
         if not text: return ""
-        # 逐字逼近
-        current_w = 0
-        res = ""
-        
-        # 预计算 ... 的宽度
-        ellipsis = "..."
-        # 假设 ... 用 Latin 或 Main 绘制
-        e_font = get_char_font('.', font_group)
-        e_width = e_font.getlength('.') * 3
-        
-        # 如果总宽度小于 max，直接返回
-        total_w = get_text_width_fallback(text, font_group)
-        if total_w <= max_width:
-             return text
-             
-        for char in text:
-            cw = get_char_font(char, font_group).getlength(char)
-            if current_w + cw + e_width > max_width:
-                return res + ellipsis
-            res += char
-            current_w += cw
-            
-        return res
+        # Determine font using logic
+        font = get_font(font_pair, text)
+        if draw.textlength(text, font=font) <= max_width:
+            return text
+        while len(text) > 0 and draw.textlength(text + "...", font=font) > max_width:
+            text = text[:-1]
+        return text + "..."
     
     def create_left_rounded_mask(size: int, radius: int) -> Image.Image:
         """创建左侧圆角、右侧直角的蒙版"""
@@ -311,7 +218,7 @@ async def generate_rating_canvas_image(
              # 类似锯齿圆形，这里简化为圆形
             draw.ellipse([cx-size/2, cy-size/2, cx+size/2, cy+size/2], fill=(45, 212, 191)) # teal-400
             # 内部感叹号
-            draw_text_fallback((cx-3, cy-10), "!", fill=(17, 24, 39), font_group=exclam_font) # gray-900 text
+            draw.text((cx-3, cy-10), "!", fill=(17, 24, 39), font=get_font(exclam_font, "!")) # gray-900 text
         elif icon_type == 'diamond': # Purple Diamond
              draw_diamond(cx, cy, size/2, fill=(168, 85, 247)) # purple-500
              
@@ -391,19 +298,19 @@ async def generate_rating_canvas_image(
         
         # Titles
         title_x = container_x1 + 80
-        draw_text_fallback((title_x, container_y1 + 20), header_title, fill=text_white, font_group=title_font)
-        draw_text_fallback((title_x, container_y1 + 58), header_subtitle, fill=(156, 163, 175), font_group=subtitle_font) # gray-400
+        draw.text((title_x, container_y1 + 20), header_title, fill=text_white, font=get_font(title_font, header_title))
+        draw.text((title_x, container_y1 + 58), header_subtitle, fill=(156, 163, 175), font=get_font(subtitle_font, header_subtitle)) # gray-400
         
         # Right Stats
         # 垂直居中计算
         stat_y_start = container_y1 + 23
         
-        label_w = get_text_width_fallback(stat_label, font_group=label_font)
+        label_w = draw.textlength(stat_label, font=get_font(label_font, stat_label))
         right_margin = container_x2 - 32
-        draw_text_fallback((right_margin - label_w, stat_y_start), stat_label, fill=(156, 163, 175), font_group=label_font)
+        draw.text((right_margin - label_w, stat_y_start), stat_label, fill=(156, 163, 175), font=get_font(label_font, stat_label))
         
-        stat_val_w = get_text_width_fallback(stat_value, font_group=title_font)
-        draw_text_fallback((right_margin - stat_val_w, stat_y_start + 24), stat_value, fill=stat_color, font_group=title_font)
+        stat_val_w = draw.textlength(stat_value, font=get_font(title_font, stat_value))
+        draw.text((right_margin - stat_val_w, stat_y_start + 24), stat_value, fill=stat_color, font=get_font(title_font, stat_value))
 
         # 绘制 Grid Items
         # 增加 Top Padding
@@ -460,29 +367,13 @@ async def generate_rating_canvas_image(
             
             # 水印
             rank_num = str(idx + 1)
-            rw = get_text_width_fallback(rank_num, font_group=rank_font)
+            rw = draw.textlength(rank_num, font=get_font(rank_font, rank_num))
             watermark_x = ix + item_width - rw + 4
             watermark_y = iy + item_height - 48
             
             txt_layer = Image.new("RGBA", (width, height), (0,0,0,0))
             txt_draw = ImageDraw.Draw(txt_layer)
-            # txt_draw 需要手动调用，这里我们用自己的函数，但 target 是 txt_draw
-            # 为了复用 draw_text_fallback，修改 draw_text_fallback 支持传入 draw 对象？
-            # 暂时临时修改 draw_text_fallback 定义不好，直接内联或者修改函数签名
-            # 让我们把 draw_text_fallback 的 draw 作为参数？
-            # 由于 draw_text_fallback 使用了闭包的 draw (line 106)，我们可以临时修改它，或者复制一份逻辑
-            # 最简单：增加 draw_obj 参数
-            
-            # 修正：上面定义的 draw_text_fallback 依赖外部 draw。
-            # 为了支持这里的 txt_draw，我们需要更新 draw_text_fallback 的定义。
-            # 下一次工具调用将更新定义，这里先假设它支持，或者我们手动实现
-            
-            # 手动实现水印绘制（简单，因为Rank是数字，肯定是 Segoe）
-            # 但是为了统一，还是重构 draw_text_fallback 吧
-            
-            # 这里先不改 draw_text_fallback 签名，直接用旧方法？不行，我们把 measure改了
-            # rank_num 只有数字，可以用 font_group[0] (Latin)
-            txt_draw.text((watermark_x, watermark_y), rank_num, fill=(107, 114, 128, 50), font=rank_font[0]) 
+            txt_draw.text((watermark_x, watermark_y), rank_num, fill=(107, 114, 128, 50), font=get_font(rank_font, rank_num))
             img.alpha_composite(txt_layer)
             
             # Title & Artist
@@ -491,9 +382,9 @@ async def generate_rating_canvas_image(
             artist = music_info.get("artistName", "") if music_info else ""
             
             disp_title = truncate_text(music_name, info_w, card_title_font)
-            draw_text_fallback((info_x, info_y), disp_title, fill=text_white, font_group=card_title_font)
+            draw.text((info_x, info_y), disp_title, fill=text_white, font=get_font(card_title_font, disp_title))
             disp_artist = truncate_text(artist, info_w, artist_font)
-            draw_text_fallback((info_x, info_y + 20), disp_artist, fill=text_gray, font_group=artist_font)
+            draw.text((info_x, info_y + 20), disp_artist, fill=text_gray, font=get_font(artist_font, disp_artist))
             
             # 底部信息
             bottom_y = iy + item_height - info_padding
@@ -508,14 +399,14 @@ async def generate_rating_canvas_image(
             badge_fg = style["text"]
             badge_border = style.get("border")
             
-            tw = get_text_width_fallback(level_text, font_group=badge_font)
+            tw = draw.textlength(level_text, font=get_font(badge_font, level_text))
             badge_w = max(32, tw + 12)
             badge_h = 16
             badge_x1 = info_x
             badge_y1 = bottom_y - badge_h
             
             draw_round_rect(badge_x1, badge_y1, badge_x1 + badge_w, badge_y1 + badge_h, 4, badge_bg, outline=badge_border)
-            draw_text_fallback((badge_x1 + (badge_w - tw) / 2, badge_y1 + 1), level_text, fill=badge_fg, font_group=badge_font)
+            draw.text((badge_x1 + (badge_w - tw) / 2, badge_y1 + 1), level_text, fill=badge_fg, font=get_font(badge_font, level_text))
             
             # 右侧数值 (区分 PScore 和 普通模式)
             is_pscore = category.get('title', '').startswith("PSCORE") or item.get('isPScore')
@@ -529,53 +420,68 @@ async def generate_rating_canvas_image(
                 # 下行: 分数 (紫色)
                 score_val = item.get("platinumScoreMax", 0)
                 score_str = f"{score_val:,}"
-                sw = get_text_width_fallback(score_str, font_group=score_font)
+                sw = draw.textlength(score_str, font=get_font(score_font, score_str))
+                # 移除重复绘制的数值
+                # score_y = bottom_y - 16
+                # draw.text((right_x - sw, score_y), score_str, fill=text_purple, font=score_font)
                 
+                # 星星 (在分数左边？或者下面？看图星星在右下角，分数在星星上面？)
+                # 再看图3: 
+                # 右下角是星星 (3实2空)
+                # 星星上面是分数 1691 (紫色)
+                # 分数上面是 Rating贡献 (紫色)
+                
+                # 好像不对。图3:
+                # 底部一行: 左边 Badge (11.90), 右边 星星 (★★★☆☆)
+                # 倒数第二行: 右边 分数 1691 (紫色)
+                # 倒数第三行: 右边 Rating +0.011 (紫色小字)
+                
+                # 让我们重新排布 PScore
                 # 星星在最底部右侧
                 star_count = item.get("platinumScoreStar", 0)
                 star_str = "★" * star_count + "☆" * (5 - star_count)
-                star_w = get_text_width_fallback(star_str, font_group=star_font)
-                draw_text_fallback((right_x - star_w, bottom_y - 12), "★" * star_count, fill=text_yellow, font_group=star_font)
+                star_w = draw.textlength(star_str, font=get_font(star_font, star_str))
+                draw.text((right_x - star_w, bottom_y - 12), "★" * star_count, fill=text_yellow, font=get_font(star_font, "★"))
                 # 补画空心星
-                filled_w = get_text_width_fallback("★" * star_count, font_group=star_font)
-                draw_text_fallback((right_x - star_w + filled_w, bottom_y - 12), "☆" * (5 - star_count), fill=text_gray, font_group=star_font)
+                filled_w = draw.textlength("★" * star_count, font=get_font(star_font, "★"))
+                draw.text((right_x - star_w + filled_w, bottom_y - 12), "☆" * (5 - star_count), fill=text_gray, font=get_font(star_font, "☆"))
                 
                 # 上方是分数
                 score_y = bottom_y - 28
-                draw_text_fallback((right_x - sw, score_y), score_str, fill=text_purple, font_group=card_title_font)
+                draw.text((right_x - sw, score_y), score_str, fill=text_purple, font=get_font(card_title_font, score_str))
                 
                 # 再上方是 Rating
                 rating_val = item.get("rating", 0)
                 rating_str = f"+{rating_val:.3f}"
                 # 使用稍大一点的字体避免看起来扁平
-                rw = get_text_width_fallback(rating_str, font_group=rating_font)
-                draw_text_fallback((right_x - rw, score_y - 16), rating_str, fill=text_purple, font_group=rating_font)
+                rw = draw.textlength(rating_str, font=get_font(rating_font, rating_str))
+                draw.text((right_x - rw, score_y - 16), rating_str, fill=text_purple, font=get_font(rating_font, rating_str))
                 
             else:
                 # 普通模式
                 # 下行: Score (绿色)
                 score_val = item.get("value", 0)
                 score_str = f"{score_val:,}"
-                sw = get_text_width_fallback(score_str, font_group=score_font)
+                sw = draw.textlength(score_str, font=get_font(score_font, score_str))
                 score_y = bottom_y - 16
-                draw_text_fallback((right_x - sw, score_y), score_str, fill=text_green, font_group=score_font)
+                draw.text((right_x - sw, score_y), score_str, fill=text_green, font=get_font(score_font, score_str))
                 
                 # 上行: Rating (蓝色) + Bonus
                 rating_val = item.get("rating", 0)
                 rating_str = f"{rating_val:.2f}"
                 bonus = item.get("ratingBonus", 0)
                 
-                rw = get_text_width_fallback(rating_str, font_group=rating_font)
+                rw = draw.textlength(rating_str, font=get_font(rating_font, rating_str))
                 current_rx = right_x
                 rating_y = score_y - 14
                 
                 if bonus > 0:
                     bonus_str = f"+{bonus:.2f}"
-                    bw = get_text_width_fallback(bonus_str, font_group=artist_font)
-                    draw_text_fallback((current_rx - bw, rating_y), bonus_str, fill=text_gray, font_group=artist_font)
+                    bw = draw.textlength(bonus_str, font=get_font(artist_font, bonus_str))
+                    draw.text((current_rx - bw, rating_y), bonus_str, fill=text_gray, font=get_font(artist_font, bonus_str))
                     current_rx -= (bw + 4)
                 
-                draw_text_fallback((current_rx - rw, rating_y - 1), rating_str, fill=text_blue, font_group=rating_font)
+                draw.text((current_rx - rw, rating_y - 1), rating_str, fill=text_blue, font=get_font(rating_font, rating_str))
             
             
         # 更新 y 坐标 (增加板块间距)
