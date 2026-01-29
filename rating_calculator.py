@@ -111,7 +111,9 @@ class RatingCalculator:
         difficulty_index: int,
         score: int,
         is_pscore: bool = False,
-        platinum_score_star: Optional[int] = None
+        platinum_score_star: Optional[int] = None,
+        all_break: bool = False,
+        full_bell: bool = False
     ) -> Dict[str, float]:
         """
         计算单曲 Rating
@@ -122,6 +124,8 @@ class RatingCalculator:
             score: 分数
             is_pscore: 是否为 PScore 项目
             platinum_score_star: PScore 白金星数（仅当 is_pscore=True 时有效）
+            all_break: 是否 All Break（普通 Rating +0.35）
+            full_bell: 是否 Full Bell（普通 Rating +0.05）
         
         Returns:
             包含 chartConstant, ratingBonus, rating 的字典
@@ -131,14 +135,23 @@ class RatingCalculator:
         if is_pscore:
             # PScore Rating = (谱面定数 + Bonus) / 750
             # 50首 ☆5 曲目 ≈ 1.0 总 Rating
+            # PScore 不适用 AB/FB
             pscore_bonus = RatingCalculator.calculate_pscore_bonus(platinum_score_star or 0)
             rating_bonus = pscore_bonus
             raw_rating = (chart_constant + pscore_bonus) / 750
             rating = round(raw_rating * 1000) / 1000  # PScore 保留3位小数
         else:
             # 普通 Rating 计算
-            rating_bonus = RatingCalculator.calculate_rating_bonus(score)
-            raw_rating = chart_constant + rating_bonus
+            # 总加成 = 分数加成 + AB加成 + FB加成
+            score_bonus = RatingCalculator.calculate_rating_bonus(score)
+            ab_bonus = 0.35 if all_break else 0.0
+            fb_bonus = 0.05 if full_bell else 0.0
+            
+            # 修正浮点误差
+            total_bonus = round((score_bonus + ab_bonus + fb_bonus) * 100) / 100
+            rating_bonus = total_bonus
+            
+            raw_rating = chart_constant + total_bonus
             rating = round(raw_rating * 100) / 100  # 保留2位小数
         
         return {

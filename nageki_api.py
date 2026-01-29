@@ -472,3 +472,185 @@ class NagekiApiClient:
                     logger.error(f"[Net API] 解析JSON响应失败: {e}")
                     logger.error(f"[Net API] 原始响应: {response_text}")
                     raise
+    
+    async def get_rating_bestlist(self, token: str) -> List[Dict[str, Any]]:
+        """
+        使用Token获取最佳成绩列表（调用Net API）
+        
+        Args:
+            token: JWT Token
+        
+        Returns:
+            最佳成绩列表
+        """
+        base_url = self.api_base_url.rstrip("/")
+        url = urljoin(base_url + "/", "api/game/ongeki/rating/bestlist")
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}"
+        }
+        
+        logger.info(f"[Net API] 请求: GET {url}")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as resp:
+                status = resp.status
+                logger.info(f"[Net API] 响应状态码: {status}")
+                
+                response_text = await resp.text()
+                logger.info(f"[Net API] 响应内容前500字符: {response_text[:500]}")
+                
+                if status >= 400:
+                    logger.error(f"[Net API] HTTP错误响应: {status}")
+                    logger.error(f"[Net API] 错误响应体: {response_text}")
+                
+                resp.raise_for_status()
+                
+                try:
+                    result = json.loads(response_text) if response_text else []
+                    logger.info(f"[Net API] 获取到 {len(result)} 条最佳成绩")
+                    return result
+                except json.JSONDecodeError as e:
+                    logger.error(f"[Net API] 解析JSON响应失败: {e}")
+                    logger.error(f"[Net API] 原始响应: {response_text}")
+                    raise
+    
+    async def get_rating_newlist(self, token: str) -> List[Dict[str, Any]]:
+        """
+        使用Token获取新歌最佳成绩列表（调用Net API）
+        
+        Args:
+            token: JWT Token
+        
+        Returns:
+            新歌最佳成绩列表
+        """
+        base_url = self.api_base_url.rstrip("/")
+        url = urljoin(base_url + "/", "api/game/ongeki/rating/newlist")
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}"
+        }
+        
+        logger.info(f"[Net API] 请求: GET {url}")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as resp:
+                status = resp.status
+                logger.info(f"[Net API] 响应状态码: {status}")
+                
+                response_text = await resp.text()
+                logger.info(f"[Net API] 响应内容前500字符: {response_text[:500]}")
+                
+                if status >= 400:
+                    logger.error(f"[Net API] HTTP错误响应: {status}")
+                    logger.error(f"[Net API] 错误响应体: {response_text}")
+                
+                resp.raise_for_status()
+                
+                try:
+                    result = json.loads(response_text) if response_text else []
+                    logger.info(f"[Net API] 获取到 {len(result)} 条新歌成绩")
+                    return result
+                except json.JSONDecodeError as e:
+                    logger.error(f"[Net API] 解析JSON响应失败: {e}")
+                    logger.error(f"[Net API] 原始响应: {response_text}")
+                    raise
+    
+    async def get_rating_pscorelist(self, token: str) -> List[Dict[str, Any]]:
+        """
+        使用Token获取白金分数列表（调用Net API）
+        
+        Args:
+            token: JWT Token
+        
+        Returns:
+            白金分数列表
+        """
+        base_url = self.api_base_url.rstrip("/")
+        url = urljoin(base_url + "/", "api/game/ongeki/rating/pscorelist")
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}"
+        }
+        
+        logger.info(f"[Net API] 请求: GET {url}")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as resp:
+                status = resp.status
+                logger.info(f"[Net API] 响应状态码: {status}")
+                
+                response_text = await resp.text()
+                logger.info(f"[Net API] 响应内容前500字符: {response_text[:500]}")
+                
+                if status >= 400:
+                    logger.error(f"[Net API] HTTP错误响应: {status}")
+                    logger.error(f"[Net API] 错误响应体: {response_text}")
+                
+                resp.raise_for_status()
+                
+                try:
+                    result = json.loads(response_text) if response_text else []
+                    logger.info(f"[Net API] 获取到 {len(result)} 条白金分数")
+                    return result
+                except json.JSONDecodeError as e:
+                    logger.error(f"[Net API] 解析JSON响应失败: {e}")
+                    logger.error(f"[Net API] 原始响应: {response_text}")
+                    raise
+    
+    async def get_general_with_token(self, token: str, key: str) -> Dict[str, Any]:
+        """
+        使用Token获取通用数据（调用Net API）
+        
+        **已弃用**: 请使用新的专用方法:
+        - get_rating_bestlist() 替代 key="new_rating_base_best_list"
+        - get_rating_newlist() 替代 key="new_rating_base_best_new_list"
+        - get_rating_pscorelist() 替代 key="new_rating_base_pscore_list"
+        
+        Args:
+            token: JWT Token
+            key: 查询键
+        """
+        # 使用 bot_api_url 作为基础URL
+        base_url = self.bot_api_url.rstrip("/") if self.bot_api_url else "http://localhost:8080"
+        url = urljoin(base_url + "/", "api/game/ongeki/general")
+        
+        # 设置请求头，使用Bearer Token认证
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}"
+        }
+        
+        params = {"key": key}
+        
+        logger.info(f"[Net API] 请求: GET {url} params={params}")
+        logger.info(f"[Net API] 请求头: {dict((k, v[:20] + '...' if k == 'Authorization' and len(v) > 20 else v) for k, v in headers.items())}")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, params=params) as resp:
+                status = resp.status
+                logger.info(f"[Net API] 响应状态码: {status}")
+                
+                # 读取响应内容
+                response_text = await resp.text()
+                logger.info(f"[Net API] 响应内容: {response_text[:500]}")
+                
+                if status >= 400:
+                    logger.error(f"[Net API] HTTP错误响应: {status}")
+                    logger.error(f"[Net API] 错误响应体: {response_text}")
+                
+                resp.raise_for_status()
+                
+                # 解析JSON
+                try:
+                    result = json.loads(response_text) if response_text else {}
+                    logger.info(f"[Net API] 响应JSON: {result}")
+                    return result
+                except json.JSONDecodeError as e:
+                    logger.error(f"[Net API] 解析JSON响应失败: {e}")
+                    logger.error(f"[Net API] 原始响应: {response_text}")
+                    raise

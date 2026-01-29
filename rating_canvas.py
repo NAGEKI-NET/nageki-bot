@@ -244,6 +244,45 @@ async def generate_rating_canvas_image(
         elif icon_type == 'diamond': # Purple Diamond
              draw_diamond(cx, cy, size/2, fill=(168, 85, 247)) # purple-500
              
+    # 检查歌曲是否已发布
+    def is_music_released(item):
+        """检查乐曲是否已发布（若 releaseDate 在未来，则视为未发布）"""
+        music_info = item.get("musicInfo") or item.get("fullMusicInfo", {}).get("music")
+        if not music_info or not music_info.get("releaseDate"):
+            return True
+        try:
+            from datetime import datetime
+            release_date_str = music_info.get("releaseDate")
+            # 尝试解析日期（支持多种格式）
+            release_date = datetime.fromisoformat(release_date_str.replace('Z', '+00:00'))
+            return release_date <= datetime.now(release_date.tzinfo or None)
+        except Exception:
+            return True
+    
+    # 绘制锁定图标
+    def draw_lock_icon(x, y, size):
+        """绘制锁定图标（简化版）"""
+        # 绘制锁身
+        lock_w = size * 0.6
+        lock_h = size * 0.5
+        lock_x = x + (size - lock_w) / 2
+        lock_y = y + size * 0.35
+        draw.rounded_rectangle(
+            [lock_x, lock_y, lock_x + lock_w, lock_y + lock_h],
+            radius=4,
+            fill=(156, 163, 175)  # gray-400
+        )
+        # 绘制锁扣
+        arc_r = size * 0.25
+        arc_cx = x + size / 2
+        arc_cy = lock_y
+        draw.arc(
+            [arc_cx - arc_r, arc_cy - arc_r * 1.2, arc_cx + arc_r, arc_cy + arc_r * 0.2],
+            start=180, end=0,
+            fill=(156, 163, 175),
+            width=int(size * 0.1)
+        )
+    
     y = margin_y
     
     # 遍历分类绘制
@@ -358,6 +397,9 @@ async def generate_rating_canvas_image(
             # 卡片背景
             draw_round_rect(ix, iy, ix + item_width, iy + item_height, 12, card_bg_color, outline=card_border_color)
             
+            # 检查歌曲是否已发布
+            music_released = is_music_released(item)
+            
             # 封面图
             jacket_size = item_height
             card_radius = 12  # 与卡片圆角半径一致
@@ -367,19 +409,24 @@ async def generate_rating_canvas_image(
             placeholder = Image.new("RGB", (jacket_size, jacket_size), (75, 85, 99))
             img.paste(placeholder, (ix, iy), placeholder_mask)
             
-            jacket_data = downloaded_jackets.get(item.get("musicId"))
-            if jacket_data:
-                try:
-                    jacket_img = Image.open(io.BytesIO(jacket_data))
-                    jacket_img = jacket_img.resize((jacket_size, jacket_size), Image.LANCZOS)
-                    
-                    # 使用精确的左侧圆角蒙版
-                    mask = create_left_rounded_mask(jacket_size, card_radius)
-                    
-                    # 使用蒙版粘贴图片，确保圆角精确对齐，不会溢出
-                    img.paste(jacket_img, (ix, iy), mask)
-                except Exception as e:
-                    logger.warning(f"[绘图] 封面图片处理失败: {e}")
+            # 如果歌曲已发布且有封面图，则显示封面
+            if music_released:
+                jacket_data = downloaded_jackets.get(item.get("musicId"))
+                if jacket_data:
+                    try:
+                        jacket_img = Image.open(io.BytesIO(jacket_data))
+                        jacket_img = jacket_img.resize((jacket_size, jacket_size), Image.LANCZOS)
+                        
+                        # 使用精确的左侧圆角蒙版
+                        mask = create_left_rounded_mask(jacket_size, card_radius)
+                        
+                        # 使用蒙版粘贴图片，确保圆角精确对齐，不会溢出
+                        img.paste(jacket_img, (ix, iy), mask)
+                    except Exception as e:
+                        logger.warning(f"[绘图] 封面图片处理失败: {e}")
+            else:
+                # 未发布的歌曲显示锁定图标
+                draw_lock_icon(ix + jacket_size // 2 - 20, iy + jacket_size // 2 - 20, 40)
             
             # 信息区域
             info_padding = 12
@@ -400,11 +447,17 @@ async def generate_rating_canvas_image(
             
             # Title & Artist
             music_info = item.get("musicInfo") or item.get("fullMusicInfo", {}).get("music")
-            music_name = music_info.get("name", f"ID: {item['musicId']}") if music_info else f"ID: {item['musicId']}"
-            artist = music_info.get("artistName", "") if music_info else ""
+            
+            if music_released and music_info:
+                music_name = music_info.get("name", f"ID: {item['musicId']}")
+                artist = music_info.get("artistName", "")
+            else:
+                # 未发布的歌曲显示占位文本
+                music_name = "未发布歌曲"
+                artist = "???"
             
             disp_title = truncate_text(music_name, info_w, card_title_font)
-            draw.text((info_x, info_y), disp_title, fill=text_white, font=get_font(card_title_font, disp_title))
+            draw.text((info_x, info_y), disp_title, fill=text_white if music_released else text_gray, font=get_font(card_title_font, disp_title))
             disp_artist = truncate_text(artist, info_w, artist_font)
             draw.text((info_x, info_y + 20), disp_artist, fill=text_gray, font=get_font(artist_font, disp_artist))
             

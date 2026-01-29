@@ -112,12 +112,18 @@ class RatingDataProcessor:
             is_pscore = item.get("isPScore", False)
             platinum_score_star = item.get("platinumScoreStar") if is_pscore else None
             
+            # 获取 AB/FB 标志
+            all_break = item.get("isAllBreak", False) or item.get("allBreak", False)
+            full_bell = item.get("isFullBell", False) or item.get("fullBell", False)
+            
             result = RatingCalculator.calculate_rating(
                 music_info,
                 level,
                 score,
                 is_pscore=is_pscore,
-                platinum_score_star=platinum_score_star
+                platinum_score_star=platinum_score_star,
+                all_break=all_break,
+                full_bell=full_bell
             )
             
             item["chartConstant"] = result["chartConstant"]
@@ -140,15 +146,35 @@ class RatingDataProcessor:
         # 使用Token获取玩家资料
         profile = await self.api_client.get_profile_with_token(token)
         
-        # 使用Token获取三个分类数据
-        b50_response = await self.api_client.get_general_with_token(token, "new_rating_base_best_list")
-        new10_response = await self.api_client.get_general_with_token(token, "new_rating_base_best_new_list")
-        pscore_response = await self.api_client.get_general_with_token(token, "new_rating_base_pscore_list")
+        # 使用新的API端点获取三个分类数据（直接返回列表）
+        b50_items = await self.api_client.get_rating_bestlist(token)
+        new10_items = await self.api_client.get_rating_newlist(token)
+        pscore_items = await self.api_client.get_rating_pscorelist(token)
         
-        # 解析数据
-        b50_items = self.parse_rating_category(b50_response.get("propertyValue", ""), is_pscore=False)
-        new10_items = self.parse_rating_category(new10_response.get("propertyValue", ""), is_pscore=False)
-        pscore_items = self.parse_rating_category(pscore_response.get("propertyValue", ""), is_pscore=True)
+        # 为每个项目添加音乐信息
+        for item in b50_items:
+            music_id = item.get("musicId")
+            if music_id:
+                music_info = self.music_cache.get(music_id)
+                if music_info:
+                    item["musicInfo"] = music_info
+                    item["fullMusicInfo"] = {"music": music_info}
+        
+        for item in new10_items:
+            music_id = item.get("musicId")
+            if music_id:
+                music_info = self.music_cache.get(music_id)
+                if music_info:
+                    item["musicInfo"] = music_info
+                    item["fullMusicInfo"] = {"music": music_info}
+        
+        for item in pscore_items:
+            music_id = item.get("musicId")
+            if music_id:
+                music_info = self.music_cache.get(music_id)
+                if music_info:
+                    item["musicInfo"] = music_info
+                    item["fullMusicInfo"] = {"music": music_info}
         
         # 计算 Rating
         self.calculate_ratings(b50_items)
