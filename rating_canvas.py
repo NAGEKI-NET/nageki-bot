@@ -5,6 +5,7 @@ import asyncio
 import logging
 import math
 from typing import Dict, Any, List, Optional, Tuple
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -106,72 +107,86 @@ async def generate_rating_canvas_image(
     draw = ImageDraw.Draw(img)
     
     # 加载字体
-    def load_font(size: int, bold=False):
+    def load_font_pair(size: int, bold=False):
         plugin_dir = os.path.dirname(__file__)
         fonts_dir = os.path.join(plugin_dir, "assets", "fonts")
         
-        # 仅使用 assets/fonts 下的用户指定字体
-        # 优先使用 MS Gothic (msgothic.ttc) 因为它支持 CJK，而 Segoe UI 不支持
-        
-        font_candidates = []
-        
+        def _load(paths):
+            for path in paths:
+                try:
+                    if os.path.exists(path):
+                        return ImageFont.truetype(path, size)
+                except Exception:
+                    continue
+            return None
+
+        # Segoe UI (Latin Priority)
+        segoe_paths = []
         if bold:
-            font_candidates.extend([
-                # 1. BIZ UD Gothic Bold
-                os.path.join(fonts_dir, "BIZ-UDGothicB.ttc"),
-                
-                # 2. MS Gothic (虽然它只有 regular，但通常包含在 ttc 中，或者 PIL 可以伪粗体)
-                # 注意：msgothic.ttc 通常包含 MS Gothic, MS PGothic, MS UI Gothic
-                os.path.join(fonts_dir, "msgothic.ttc"),
-                os.path.join(fonts_dir, "msgothic.ttf"),
-                
-                # 3. Segoe UI Bold (备选，不支持 CJK)
-                os.path.join(fonts_dir, "segoeuib.ttf"),
-                os.path.join(fonts_dir, "SegoeUI-Bold.ttf"),
-            ])
+             segoe_paths = [os.path.join(fonts_dir, "segoeuib.ttf"), os.path.join(fonts_dir, "SegoeUI-Bold.ttf")]
         else:
-            font_candidates.extend([
-                # 1. BIZ UD Gothic Regular
-                os.path.join(fonts_dir, "BIZ-UDGOTHICR.TTC"),
-                
-                # 2. MS Gothic (优先，支持中文/日文)
+             segoe_paths = [os.path.join(fonts_dir, "segoeui.ttf"), os.path.join(fonts_dir, "SegoeUI.ttf")]
+             
+        # BIZ UD Gothic (CJK Priority)
+        biz_paths = []
+        if bold:
+             biz_paths = [
+                os.path.join(fonts_dir, "BIZ-UDGothicB.ttc"),
                 os.path.join(fonts_dir, "msgothic.ttc"),
-                os.path.join(fonts_dir, "msgothic.ttf"),
-                
-                # 3. Segoe UI Regular (备选)
-                os.path.join(fonts_dir, "segoeui.ttf"),
-                os.path.join(fonts_dir, "SegoeUI.ttf"),
-            ])
-            
-        for path in font_candidates:
-            try:
-                if os.path.exists(path):
-                    return ImageFont.truetype(path, size)
-            except Exception:
-                continue
+                os.path.join(fonts_dir, "msgothic.ttf")
+             ]
+        else:
+             biz_paths = [
+                os.path.join(fonts_dir, "BIZ-UDGOTHICR.TTC"),
+                os.path.join(fonts_dir, "msgothic.ttc"),
+                os.path.join(fonts_dir, "msgothic.ttf")
+             ]
+             
+        font_latin = _load(segoe_paths)
+        font_cjk = _load(biz_paths)
         
-        logger.error(f"[绘图] 严重错误: 未找到 assets/fonts 下的指定字体！")
-        logger.error(f"[绘图] 请确保 {fonts_dir} 包含 BIZ-UDGothic, msgothic.ttc 或 segoeui.ttf")
-        logger.warning(f"[绘图] 正在回退到 PIL 默认字体 (此字体不支持中文，会出现乱码)")
-        return ImageFont.load_default()
+        # Fallback Logic
+        if not font_latin and font_cjk:
+            font_latin = font_cjk
+        if not font_cjk and font_latin:
+            font_cjk = font_latin
+        if not font_latin and not font_cjk:
+            logger.error(f"[绘图] 严重错误: 未找到任何字体！请检查 assets/fonts 目录。")
+            fallback = ImageFont.load_default()
+            return (fallback, fallback)
+            
+        return (font_latin, font_cjk)
+        
+    def get_font(pair, text):
+        latin, cjk = pair
+        if not latin: return cjk
+        if not cjk: return latin
+        
+        text_str = str(text)
+        # Check for CJK characters (Punctuation, Hiragana, Katakana, Han, Fullwidth)
+        if re.search(r'[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff\uff00-\uffef]', text_str):
+            return cjk
+        return latin
     
-    title_font = load_font(24, bold=True) # text-2xl
-    subtitle_font = load_font(16)
-    card_title_font = load_font(15, bold=True)
-    label_font = load_font(14)            # text-sm (用于Header右侧Label)
-    artist_font = load_font(11)
-    rating_font = load_font(13, bold=True)
-    score_font = load_font(15, bold=True)
-    badge_font = load_font(11, bold=True)
-    rank_font = load_font(48, bold=True)
-    star_font = load_font(12) # 用于星星
-    
+    title_font = load_font_pair(24, bold=True)
+    subtitle_font = load_font_pair(16)
+    card_title_font = load_font_pair(15, bold=True)
+    label_font = load_font_pair(14)
+    artist_font = load_font_pair(11)
+    rating_font = load_font_pair(13, bold=True)
+    score_font = load_font_pair(15, bold=True)
+    badge_font = load_font_pair(11, bold=True)
+    rank_font = load_font_pair(48, bold=True)
+    star_font = load_font_pair(12) # 用于星星
+    exclam_font = load_font_pair(18, bold=True) # 用于 Badge !   
     # 辅助绘图函数
     def draw_round_rect(x1, y1, x2, y2, radius, fill, outline=None, width=1):
         draw.rounded_rectangle([x1, y1, x2, y2], radius=radius, fill=fill, outline=outline, width=width)
     
-    def truncate_text(text, max_width, font):
+    def truncate_text(text, max_width, font_pair):
         if not text: return ""
+        # Determine font using logic
+        font = get_font(font_pair, text)
         if draw.textlength(text, font=font) <= max_width:
             return text
         while len(text) > 0 and draw.textlength(text + "...", font=font) > max_width:
@@ -210,7 +225,7 @@ async def generate_rating_canvas_image(
              # 类似锯齿圆形，这里简化为圆形
             draw.ellipse([cx-size/2, cy-size/2, cx+size/2, cy+size/2], fill=(45, 212, 191)) # teal-400
             # 内部感叹号
-            draw.text((cx-3, cy-10), "!", fill=(17, 24, 39), font=load_font(18, bold=True)) # gray-900 text
+            draw.text((cx-3, cy-10), "!", fill=(17, 24, 39), font=get_font(exclam_font, "!")) # gray-900 text
         elif icon_type == 'diamond': # Purple Diamond
              draw_diamond(cx, cy, size/2, fill=(168, 85, 247)) # purple-500
              
@@ -290,19 +305,19 @@ async def generate_rating_canvas_image(
         
         # Titles
         title_x = container_x1 + 80
-        draw.text((title_x, container_y1 + 20), header_title, fill=text_white, font=title_font)
-        draw.text((title_x, container_y1 + 58), header_subtitle, fill=(156, 163, 175), font=subtitle_font) # gray-400
+        draw.text((title_x, container_y1 + 20), header_title, fill=text_white, font=get_font(title_font, header_title))
+        draw.text((title_x, container_y1 + 58), header_subtitle, fill=(156, 163, 175), font=get_font(subtitle_font, header_subtitle)) # gray-400
         
         # Right Stats
         # 垂直居中计算
         stat_y_start = container_y1 + 23
         
-        label_w = draw.textlength(stat_label, font=label_font)
+        label_w = draw.textlength(stat_label, font=get_font(label_font, stat_label))
         right_margin = container_x2 - 32
-        draw.text((right_margin - label_w, stat_y_start), stat_label, fill=(156, 163, 175), font=label_font)
+        draw.text((right_margin - label_w, stat_y_start), stat_label, fill=(156, 163, 175), font=get_font(label_font, stat_label))
         
-        stat_val_w = draw.textlength(stat_value, font=title_font)
-        draw.text((right_margin - stat_val_w, stat_y_start + 24), stat_value, fill=stat_color, font=title_font)
+        stat_val_w = draw.textlength(stat_value, font=get_font(title_font, stat_value))
+        draw.text((right_margin - stat_val_w, stat_y_start + 24), stat_value, fill=stat_color, font=get_font(title_font, stat_value))
 
         # 绘制 Grid Items
         # 增加 Top Padding
@@ -359,13 +374,13 @@ async def generate_rating_canvas_image(
             
             # 水印
             rank_num = str(idx + 1)
-            rw = draw.textlength(rank_num, font=rank_font)
+            rw = draw.textlength(rank_num, font=get_font(rank_font, rank_num))
             watermark_x = ix + item_width - rw + 4
             watermark_y = iy + item_height - 48
             
             txt_layer = Image.new("RGBA", (width, height), (0,0,0,0))
             txt_draw = ImageDraw.Draw(txt_layer)
-            txt_draw.text((watermark_x, watermark_y), rank_num, fill=(107, 114, 128, 50), font=rank_font)
+            txt_draw.text((watermark_x, watermark_y), rank_num, fill=(107, 114, 128, 50), font=get_font(rank_font, rank_num))
             img.alpha_composite(txt_layer)
             
             # Title & Artist
@@ -373,8 +388,10 @@ async def generate_rating_canvas_image(
             music_name = music_info.get("name", f"ID: {item['musicId']}") if music_info else f"ID: {item['musicId']}"
             artist = music_info.get("artistName", "") if music_info else ""
             
-            draw.text((info_x, info_y), truncate_text(music_name, info_w, card_title_font), fill=text_white, font=card_title_font)
-            draw.text((info_x, info_y + 20), truncate_text(artist, info_w, artist_font), fill=text_gray, font=artist_font)
+            disp_title = truncate_text(music_name, info_w, card_title_font)
+            draw.text((info_x, info_y), disp_title, fill=text_white, font=get_font(card_title_font, disp_title))
+            disp_artist = truncate_text(artist, info_w, artist_font)
+            draw.text((info_x, info_y + 20), disp_artist, fill=text_gray, font=get_font(artist_font, disp_artist))
             
             # 底部信息
             bottom_y = iy + item_height - info_padding
@@ -389,14 +406,14 @@ async def generate_rating_canvas_image(
             badge_fg = style["text"]
             badge_border = style.get("border")
             
-            tw = draw.textlength(level_text, font=badge_font)
+            tw = draw.textlength(level_text, font=get_font(badge_font, level_text))
             badge_w = max(32, tw + 12)
             badge_h = 16
             badge_x1 = info_x
             badge_y1 = bottom_y - badge_h
             
             draw_round_rect(badge_x1, badge_y1, badge_x1 + badge_w, badge_y1 + badge_h, 4, badge_bg, outline=badge_border)
-            draw.text((badge_x1 + (badge_w - tw) / 2, badge_y1 + 1), level_text, fill=badge_fg, font=badge_font)
+            draw.text((badge_x1 + (badge_w - tw) / 2, badge_y1 + 1), level_text, fill=badge_fg, font=get_font(badge_font, level_text))
             
             # 右侧数值 (区分 PScore 和 普通模式)
             is_pscore = category.get('title', '').startswith("PSCORE") or item.get('isPScore')
@@ -410,7 +427,7 @@ async def generate_rating_canvas_image(
                 # 下行: 分数 (紫色)
                 score_val = item.get("platinumScoreMax", 0)
                 score_str = f"{score_val:,}"
-                sw = draw.textlength(score_str, font=score_font)
+                sw = draw.textlength(score_str, font=get_font(score_font, score_str))
                 # 移除重复绘制的数值
                 # score_y = bottom_y - 16
                 # draw.text((right_x - sw, score_y), score_str, fill=text_purple, font=score_font)
@@ -430,48 +447,48 @@ async def generate_rating_canvas_image(
                 # 星星在最底部右侧
                 star_count = item.get("platinumScoreStar", 0)
                 star_str = "★" * star_count + "☆" * (5 - star_count)
-                star_w = draw.textlength(star_str, font=star_font)
-                draw.text((right_x - star_w, bottom_y - 12), "★" * star_count, fill=text_yellow, font=star_font)
+                star_w = draw.textlength(star_str, font=get_font(star_font, star_str))
+                draw.text((right_x - star_w, bottom_y - 12), "★" * star_count, fill=text_yellow, font=get_font(star_font, "★"))
                 # 补画空心星
-                filled_w = draw.textlength("★" * star_count, font=star_font)
-                draw.text((right_x - star_w + filled_w, bottom_y - 12), "☆" * (5 - star_count), fill=text_gray, font=star_font)
+                filled_w = draw.textlength("★" * star_count, font=get_font(star_font, "★"))
+                draw.text((right_x - star_w + filled_w, bottom_y - 12), "☆" * (5 - star_count), fill=text_gray, font=get_font(star_font, "☆"))
                 
                 # 上方是分数
                 score_y = bottom_y - 28
-                draw.text((right_x - sw, score_y), score_str, fill=text_purple, font=card_title_font)
+                draw.text((right_x - sw, score_y), score_str, fill=text_purple, font=get_font(card_title_font, score_str))
                 
                 # 再上方是 Rating
                 rating_val = item.get("rating", 0)
                 rating_str = f"+{rating_val:.3f}"
                 # 使用稍大一点的字体避免看起来扁平
-                rw = draw.textlength(rating_str, font=rating_font)
-                draw.text((right_x - rw, score_y - 16), rating_str, fill=text_purple, font=rating_font)
+                rw = draw.textlength(rating_str, font=get_font(rating_font, rating_str))
+                draw.text((right_x - rw, score_y - 16), rating_str, fill=text_purple, font=get_font(rating_font, rating_str))
                 
             else:
                 # 普通模式
                 # 下行: Score (绿色)
                 score_val = item.get("value", 0)
                 score_str = f"{score_val:,}"
-                sw = draw.textlength(score_str, font=score_font)
+                sw = draw.textlength(score_str, font=get_font(score_font, score_str))
                 score_y = bottom_y - 16
-                draw.text((right_x - sw, score_y), score_str, fill=text_green, font=score_font)
+                draw.text((right_x - sw, score_y), score_str, fill=text_green, font=get_font(score_font, score_str))
                 
                 # 上行: Rating (蓝色) + Bonus
                 rating_val = item.get("rating", 0)
                 rating_str = f"{rating_val:.2f}"
                 bonus = item.get("ratingBonus", 0)
                 
-                rw = draw.textlength(rating_str, font=rating_font)
+                rw = draw.textlength(rating_str, font=get_font(rating_font, rating_str))
                 current_rx = right_x
                 rating_y = score_y - 14
                 
                 if bonus > 0:
                     bonus_str = f"+{bonus:.2f}"
-                    bw = draw.textlength(bonus_str, font=artist_font)
-                    draw.text((current_rx - bw, rating_y), bonus_str, fill=text_gray, font=artist_font)
+                    bw = draw.textlength(bonus_str, font=get_font(artist_font, bonus_str))
+                    draw.text((current_rx - bw, rating_y), bonus_str, fill=text_gray, font=get_font(artist_font, bonus_str))
                     current_rx -= (bw + 4)
                 
-                draw.text((current_rx - rw, rating_y - 1), rating_str, fill=text_blue, font=rating_font)
+                draw.text((current_rx - rw, rating_y - 1), rating_str, fill=text_blue, font=get_font(rating_font, rating_str))
             
             
         # 更新 y 坐标 (增加板块间距)
