@@ -107,41 +107,60 @@ async def generate_rating_canvas_image(
     
     # 加载字体
     def load_font(size: int, bold=False):
-        plugin_dir = os.path.dirname(__file__)
-        fonts_dir = os.path.join(plugin_dir, "assets", "fonts")
-        
-        # 强制仅使用 Noto Sans SC 字体 (Server 部署专用)
-        # 请确保 assets/fonts 目录下有 NotoSansSC-Regular.ttf 和 NotoSansSC-Bold.ttf
-        # 支持 ttf 和 otf
+        # 用户已在 Ubuntu 系统安装字体，因此移除强制使用 assets 目录的逻辑
+        # 优先查找系统中的 Noto Sans SC
         
         font_candidates = []
         
         if bold:
             font_candidates.extend([
-                os.path.join(fonts_dir, "NotoSansSC-Bold.ttf"),
-                os.path.join(fonts_dir, "NotoSansSC-Bold.otf"),
-                # 兼容 Noto Sans SC Variable (Google Fonts download)
-                os.path.join(fonts_dir, "NotoSansSC-VariableFont_wght.ttf"), 
+                # Ubuntu / Linux 常见路径
+                "/usr/share/fonts/opentype/noto/NotoSansSC-Bold.otf",
+                "/usr/share/fonts/truetype/noto/NotoSansSC-Bold.otf",
+                "/usr/share/fonts/noto-cjk/NotoSansSC-Bold.otf",
+                "NotoSansSC-Bold.otf",
+                "NotoSansSC-Bold.ttf",
+                
+                # Windows 常见路径 (本地开发兼容)
+                "C:/Windows/Fonts/msyhbd.ttc", 
+                "msyhbd.ttc",
+                "arialbd.ttf"
             ])
         else:
             font_candidates.extend([
-                os.path.join(fonts_dir, "NotoSansSC-Regular.ttf"),
-                os.path.join(fonts_dir, "NotoSansSC-Regular.otf"),
-                os.path.join(fonts_dir, "NotoSansSC-VariableFont_wght.ttf"),
+                # Ubuntu / Linux 常见路径
+                "/usr/share/fonts/opentype/noto/NotoSansSC-Regular.otf",
+                "/usr/share/fonts/truetype/noto/NotoSansSC-Regular.otf",
+                "/usr/share/fonts/noto-cjk/NotoSansSC-Regular.otf",
+                "NotoSansSC-Regular.otf",
+                "NotoSansSC-Regular.ttf",
+                
+                # Windows 常见路径
+                "C:/Windows/Fonts/msyh.ttc",
+                "msyh.ttc", 
+                "arial.ttf"
             ])
             
         for path in font_candidates:
             try:
-                if os.path.exists(path):
-                    # 如果是 Variable Font，通常默认就是 Regular，粗体可能需要指定 index 或 layout_engine
-                    # 但 PIL 对 Variable Font 支持有限，最好是静态字体文件
-                    return ImageFont.truetype(path, size)
+                # 尝试加载 (如果是绝对路径需检查存在，相对路径/文件名则由PIL在系统路径查找)
+                if os.path.isabs(path) and not os.path.exists(path):
+                     continue
+                
+                return ImageFont.truetype(path, size)
             except Exception:
                 continue
         
-        # 如果找不到指定字体，记录错误并返回默认字体 (虽然这在服务器上可能显示乱码，但防止崩溃)
-        # 实际部署时必需上传字体文件
-        logger.warning(f"[绘图] 未找到 NotoSansSC 字体文件! 请检查 {fonts_dir}")
+        # 如果都找不到，尝试直接加载字体名 (依赖系统 fontconfig)
+        try:
+            return ImageFont.truetype("Noto Sans SC", size)
+        except Exception:
+            pass
+            
+        logger.error(f"[绘图] 严重错误: 未找到 Noto Sans SC 或其他兼容字体！")
+        logger.error(f"[绘图] 已尝试以下路径/文件名: {font_candidates}")
+        logger.error(f"[绘图] 请确认服务器已安装 Noto Sans SC 字体。Ubuntu/Debian 可运行: apt install fonts-noto-cjk")
+        logger.warning(f"[绘图] 正在回退到 PIL 默认字体 (此字体不支持中文，会出现乱码)")
         return ImageFont.load_default()
     
     title_font = load_font(24, bold=True) # text-2xl
