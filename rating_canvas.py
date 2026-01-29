@@ -107,19 +107,39 @@ async def generate_rating_canvas_image(
     
     # 加载字体
     def load_font(size: int, bold=False):
-        font_paths = []
+        plugin_dir = os.path.dirname(__file__)
+        fonts_dir = os.path.join(plugin_dir, "assets", "fonts")
+        
+        # 优先查找内置字体 (假设文件名分别为 regular.ttf 和 bold.ttf，用户需自行放入)
+        # 或者尝试常见的字体文件名
+        font_candidates = []
+        
         if bold:
-            font_paths.extend([
+            font_candidates.extend([
+                os.path.join(fonts_dir, "msyhbd.ttc"),
+                os.path.join(fonts_dir, "msyhbd.ttf"),
+                os.path.join(fonts_dir, "SourceHanSansCN-Bold.otf"),
+                os.path.join(fonts_dir, "SourceHanSansCN-Bold.ttf"),
                 "msyhbd.ttc", "msyhbd.ttf", "simheibd.ttf", "arialbd.ttf",
                 "C:/Windows/Fonts/msyhbd.ttc", "C:/Windows/Fonts/arialbd.ttf"
             ])
-        font_paths.extend([
-            "msyh.ttc", "msyh.ttf", "simhei.ttf", "arial.ttf",
-            "C:/Windows/Fonts/msyh.ttc", "C:/Windows/Fonts/msyh.ttf",
-            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc"
-        ])
-        for path in font_paths:
+        else:
+            font_candidates.extend([
+                os.path.join(fonts_dir, "msyh.ttc"),
+                os.path.join(fonts_dir, "msyh.ttf"),
+                os.path.join(fonts_dir, "SourceHanSansCN-Regular.otf"),
+                os.path.join(fonts_dir, "SourceHanSansCN-Regular.ttf"),
+                "msyh.ttc", "msyh.ttf", "simhei.ttf", "arial.ttf",
+                "C:/Windows/Fonts/msyh.ttc", "C:/Windows/Fonts/msyh.ttf",
+                "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc"
+            ])
+            
+        for path in font_candidates:
             try:
+                # 检查文件是否存在（避免Pillow报错）
+                if os.path.isabs(path) and not os.path.exists(path) and not path.startswith("C:/Windows/Fonts"):
+                     continue
+                     
                 return ImageFont.truetype(path, size)
             except Exception:
                 continue
