@@ -111,25 +111,30 @@ async def generate_rating_canvas_image(
         fonts_dir = os.path.join(plugin_dir, "assets", "fonts")
         
         # 仅使用 assets/fonts 下的用户指定字体
-        # 优先使用 YaHei (msyh.ttc) 因为它支持 CJK，而 Segoe UI 不支持
+        # 优先使用 MS Gothic (msgothic.ttc) 因为它支持 CJK，而 Segoe UI 不支持
         
         font_candidates = []
         
         if bold:
             font_candidates.extend([
-                # 1. YaHei Bold (优先，支持中文)
-                os.path.join(fonts_dir, "msyhbd.ttc"),
-                os.path.join(fonts_dir, "msyhbd.ttf"),
-                # 2. Segoe UI Bold (备选)
+                # 1. MS Gothic (虽然它只有 regular，但通常包含在 ttc 中，或者 PIL 可以伪粗体)
+                # 注意：msgothic.ttc 通常包含 MS Gothic, MS PGothic, MS UI Gothic
+                os.path.join(fonts_dir, "msgothic.ttc"),
+                os.path.join(fonts_dir, "msgothic.ttf"),
+                
+                # 2. Segoe UI Bold (备选，不支持 CJK)
                 os.path.join(fonts_dir, "segoeuib.ttf"),
+                os.path.join(fonts_dir, "SegoeUI-Bold.ttf"),
             ])
         else:
             font_candidates.extend([
-                # 1. YaHei Regular (优先，支持中文)
-                os.path.join(fonts_dir, "msyh.ttc"),
-                os.path.join(fonts_dir, "msyh.ttf"),
+                # 1. MS Gothic (优先，支持中文/日文)
+                os.path.join(fonts_dir, "msgothic.ttc"),
+                os.path.join(fonts_dir, "msgothic.ttf"),
+                
                 # 2. Segoe UI Regular (备选)
                 os.path.join(fonts_dir, "segoeui.ttf"),
+                os.path.join(fonts_dir, "SegoeUI.ttf"),
             ])
             
         for path in font_candidates:
@@ -140,7 +145,7 @@ async def generate_rating_canvas_image(
                 continue
         
         logger.error(f"[绘图] 严重错误: 未找到 assets/fonts 下的指定字体！")
-        logger.error(f"[绘图] 请确保 {fonts_dir} 包含 msyh.ttc/segoeui.ttf 等文件")
+        logger.error(f"[绘图] 请确保 {fonts_dir} 包含 msgothic.ttc 和 segoeui.ttf")
         logger.warning(f"[绘图] 正在回退到 PIL 默认字体 (此字体不支持中文，会出现乱码)")
         return ImageFont.load_default()
     
