@@ -461,102 +461,113 @@ async def generate_rating_canvas_image(
             disp_artist = truncate_text(artist, info_w, artist_font)
             draw.text((info_x, info_y + 20), disp_artist, fill=text_gray, font=get_font(artist_font, disp_artist))
             
-            # 底部信息
-            bottom_y = iy + item_height - info_padding
-            
-            # 难度 Badge
-            level = item.get("level", 0)
-            chart_const = item.get("chartConstant", 0.0)
-            level_text = f"{chart_const:.1f}"
-            
-            style = diff_styles.get(level, {"bg": (75, 85, 99), "text": (255, 255, 255)})
-            badge_bg = style["bg"]
-            badge_fg = style["text"]
-            badge_border = style.get("border")
-            
-            tw = draw.textlength(level_text, font=get_font(badge_font, level_text))
-            badge_w = max(32, tw + 12)
-            badge_h = 16
-            badge_x1 = info_x
-            badge_y1 = bottom_y - badge_h
-            
-            draw_round_rect(badge_x1, badge_y1, badge_x1 + badge_w, badge_y1 + badge_h, 4, badge_bg, outline=badge_border)
-            draw.text((badge_x1 + (badge_w - tw) / 2, badge_y1 + 1), level_text, fill=badge_fg, font=get_font(badge_font, level_text))
-            
-            # 右侧数值 (区分 PScore 和 普通模式)
-            is_pscore = category.get('title', '').startswith("PSCORE") or item.get('isPScore')
-            right_x = ix + item_width - info_padding
-            
-            if is_pscore:
-                # PScore 模式
-                # 下行: 白金分 + 星星
-                # 上行: Rating 贡献 (紫色)
+            # 只有已发布的歌曲才显示详细信息（难度、分数、Rating等）
+            if music_released:
+                # 底部信息
+                bottom_y = iy + item_height - info_padding
                 
-                # 下行: 分数 (紫色)
-                score_val = item.get("platinumScoreMax", 0)
-                score_str = f"{score_val:,}"
-                sw = draw.textlength(score_str, font=get_font(score_font, score_str))
-                # 移除重复绘制的数值
-                # score_y = bottom_y - 16
-                # draw.text((right_x - sw, score_y), score_str, fill=text_purple, font=score_font)
+                # 难度 Badge
+                level = item.get("level", 0)
+                chart_const = item.get("chartConstant", 0.0)
+                level_text = f"{chart_const:.1f}"
                 
-                # 星星 (在分数左边？或者下面？看图星星在右下角，分数在星星上面？)
-                # 再看图3: 
-                # 右下角是星星 (3实2空)
-                # 星星上面是分数 1691 (紫色)
-                # 分数上面是 Rating贡献 (紫色)
+                style = diff_styles.get(level, {"bg": (75, 85, 99), "text": (255, 255, 255)})
+                badge_bg = style["bg"]
+                badge_fg = style["text"]
+                badge_border = style.get("border")
                 
-                # 好像不对。图3:
-                # 底部一行: 左边 Badge (11.90), 右边 星星 (★★★☆☆)
-                # 倒数第二行: 右边 分数 1691 (紫色)
-                # 倒数第三行: 右边 Rating +0.011 (紫色小字)
+                tw = draw.textlength(level_text, font=get_font(badge_font, level_text))
+                badge_w = max(32, tw + 12)
+                badge_h = 16
+                badge_x1 = info_x
+                badge_y1 = bottom_y - badge_h
                 
-                # 让我们重新排布 PScore
-                # 星星在最底部右侧
-                star_count = item.get("platinumScoreStar", 0)
-                star_str = "★" * star_count + "☆" * (5 - star_count)
-                star_w = draw.textlength(star_str, font=get_font(star_font, star_str))
-                draw.text((right_x - star_w, bottom_y - 12), "★" * star_count, fill=text_yellow, font=get_font(star_font, "★"))
-                # 补画空心星
-                filled_w = draw.textlength("★" * star_count, font=get_font(star_font, "★"))
-                draw.text((right_x - star_w + filled_w, bottom_y - 12), "☆" * (5 - star_count), fill=text_gray, font=get_font(star_font, "☆"))
+                draw_round_rect(badge_x1, badge_y1, badge_x1 + badge_w, badge_y1 + badge_h, 4, badge_bg, outline=badge_border)
+                draw.text((badge_x1 + (badge_w - tw) / 2, badge_y1 + 1), level_text, fill=badge_fg, font=get_font(badge_font, level_text))
                 
-                # 上方是分数
-                score_y = bottom_y - 28
-                draw.text((right_x - sw, score_y), score_str, fill=text_purple, font=get_font(card_title_font, score_str))
+                # 右侧数值 (区分 PScore 和 普通模式)
+                is_pscore = category.get('title', '').startswith("PSCORE") or item.get('isPScore')
+                right_x = ix + item_width - info_padding
                 
-                # 再上方是 Rating
-                rating_val = item.get("rating", 0)
-                rating_str = f"+{rating_val:.3f}"
-                # 使用稍大一点的字体避免看起来扁平
-                rw = draw.textlength(rating_str, font=get_font(rating_font, rating_str))
-                draw.text((right_x - rw, score_y - 16), rating_str, fill=text_purple, font=get_font(rating_font, rating_str))
-                
-            else:
-                # 普通模式
-                # 下行: Score (绿色)
-                score_val = item.get("value", 0)
-                score_str = f"{score_val:,}"
-                sw = draw.textlength(score_str, font=get_font(score_font, score_str))
-                score_y = bottom_y - 16
-                draw.text((right_x - sw, score_y), score_str, fill=text_green, font=get_font(score_font, score_str))
-                
-                # 上行: Rating (蓝色) + Bonus
-                rating_val = item.get("rating", 0)
-                rating_str = f"{rating_val:.2f}"
-                bonus = item.get("ratingBonus", 0)
-                
-                rw = draw.textlength(rating_str, font=get_font(rating_font, rating_str))
-                current_rx = right_x
-                rating_y = score_y - 14
-                
-                if bonus > 0:
-                    bonus_str = f"+{bonus:.2f}"
-                    bw = draw.textlength(bonus_str, font=get_font(artist_font, bonus_str))
-                    draw.text((current_rx - bw, rating_y), bonus_str, fill=text_gray, font=get_font(artist_font, bonus_str))
-                    current_rx -= (bw + 4)
-                
-                draw.text((current_rx - rw, rating_y - 1), rating_str, fill=text_blue, font=get_font(rating_font, rating_str))
+                if is_pscore:
+                    # PScore 模式
+                    # 下行: 白金分 + 星星
+                    # 上行: Rating 贡献 (紫色)
+                    
+                    # 下行: 分数 (紫色)
+                    score_val = item.get("platinumScoreMax", 0)
+                    score_str = f"{score_val:,}"
+                    sw = draw.textlength(score_str, font=get_font(score_font, score_str))
+                    # 移除重复绘制的数值
+                    # score_y = bottom_y - 16
+                    # draw.text((right_x - sw, score_y), score_str, fill=text_purple, font=score_font)
+                    
+                    # 星星 (在分数左边？或者下面？看图星星在右下角，分数在星星上面？)
+                    # 再看图3: 
+                    # 右下角是星星 (3实2空)
+                    # 星星上面是分数 1691 (紫色)
+                    # 分数上面是 Rating贡献 (紫色)
+                    
+                    # 好像不对。图3:
+                    # 底部一行: 左边 Badge (11.90), 右边 星星 (★★★☆☆)
+                    # 倒数第二行: 右边 分数 1691 (紫色)
+                    # 倒数第三行: 右边 Rating +0.011 (紫色小字)
+                    
+                    # 让我们重新排布 PScore
+                    # 星星在最底部右侧
+                    star_count = item.get("platinumScoreStar", 0)
+                    star_str = "★" * star_count + "☆" * (5 - star_count)
+                    star_w = draw.textlength(star_str, font=get_font(star_font, star_str))
+                    draw.text((right_x - star_w, bottom_y - 12), "★" * star_count, fill=text_yellow, font=get_font(star_font, "★"))
+                    # 补画空心星
+                    filled_w = draw.textlength("★" * star_count, font=get_font(star_font, "★"))
+                    draw.text((right_x - star_w + filled_w, bottom_y - 12), "☆" * (5 - star_count), fill=text_gray, font=get_font(star_font, "☆"))
+                    
+                    # 上方是分数
+                    score_y = bottom_y - 28
+                    draw.text((right_x - sw, score_y), score_str, fill=text_purple, font=get_font(card_title_font, score_str))
+                    
+                    # 再上方是 Rating
+                    rating_val = item.get("rating", 0)
+                    rating_str = f"+{rating_val:.3f}"
+                    # 使用稍大一点的字体避免看起来扁平
+                    rw = draw.textlength(rating_str, font=get_font(rating_font, rating_str))
+                    draw.text((right_x - rw, score_y - 16), rating_str, fill=text_purple, font=get_font(rating_font, rating_str))
+                    
+                else:
+                    # 普通模式
+                    # 下行: Score (绿色)
+                    score_val = item.get("value", 0)
+                    score_str = f"{score_val:,}"
+                    sw = draw.textlength(score_str, font=get_font(score_font, score_str))
+                    score_y = bottom_y - 14
+                    draw.text((right_x - sw, score_y), score_str, fill=text_green, font=get_font(score_font, score_str))
+                    
+                    # 上行: Rating + Bonus (蓝色小字)
+                    rating_val = item.get("rating", 0)
+                    rating_bonus = item.get("ratingBonus", 0)
+                    
+                    # 构建 Rating 显示文本
+                    rating_parts = [f"{rating_val:.2f}"]
+                    
+                    # 添加 Bonus 显示
+                    if rating_bonus > 0:
+                        rating_parts.append(f"+{rating_bonus:.2f}")
+                    
+                    # AB/FB 标记
+                    ab_fb_parts = []
+                    if item.get("isAllBreak") or item.get("allBreak"):
+                        ab_fb_parts.append("AB")
+                    if item.get("isFullBell") or item.get("fullBell"):
+                        ab_fb_parts.append("FB")
+                    
+                    # 组合文本
+                    rating_text = " ".join(rating_parts)
+                    if ab_fb_parts:
+                        rating_text += " " + " ".join(ab_fb_parts)
+                    
+                    rw = draw.textlength(rating_text, font=get_font(rating_font, rating_text))
+                    draw.text((right_x - rw, score_y - 16), rating_text, fill=text_blue, font=get_font(rating_font, rating_text))
             
             
         # 更新 y 坐标 (增加板块间距)
