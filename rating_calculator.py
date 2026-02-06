@@ -6,6 +6,47 @@ class RatingCalculator:
     """Rating 计算器"""
     
     @staticmethod
+    def calculate_maimai_rating(level_constant: float, achievement: int) -> int:
+        """
+        计算 Maimai DX Rating
+        
+        Args:
+            level_constant: 谱面定数 (如 14.0)
+            achievement: 达成率 (如 1005000 代表 100.5000%)
+            
+        Returns:
+            Rating 值 (整数)
+        """
+        # 达成率转换为百分比数值 (100.5000)
+        rate_pct = achievement / 10000.0
+        
+        if rate_pct >= 100.5:
+            coef = 22.4
+        elif rate_pct >= 100.0:
+            coef = 21.6
+        elif rate_pct >= 99.5:
+            coef = 21.1
+        elif rate_pct >= 99.0:
+            coef = 20.8
+        elif rate_pct >= 98.0:
+            coef = 20.3
+        elif rate_pct >= 97.0:
+            coef = 20.0
+        else:
+            # 97以下
+            coef = 16.8
+            # 注意: 97以下公式可能更复杂
+            
+        # Rating = 定数 * 达成率(上限100.5%) * 系数
+        # 达成率倍率: 100.5% -> 1.005
+        # 即使实际达成率超过 100.5%，计算时也取 1.005
+        calc_rate = min(achievement, 1005000) / 1000000.0
+        
+        # 结果向下取整
+        rating = int(level_constant * calc_rate * coef)
+        return rating
+
+    @staticmethod
     def get_chart_constant(music: Dict[str, Any], difficulty_index: int) -> float:
         """
         获取谱面定数

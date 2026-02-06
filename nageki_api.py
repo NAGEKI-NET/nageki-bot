@@ -283,21 +283,88 @@ class NagekiApiClient:
                     logger.error(f"[Net API] 原始响应: {response_text}")
                     raise
     
-    async def get_music_list(self) -> List[Dict[str, Any]]:
-        """获取音乐列表（使用更长的超时时间，因为列表可能很大）"""
-        params = {"key": "NANETUSEAPIGETKEY4829321346517"}
-        logger.info("[Net API] 开始获取音乐列表（可能需要较长时间）...")
-        resp = await self._request("GET", "api/game/ongeki/data/musicList", params=params, timeout=120)
-        # 兼容 { data: [] } 或 []
+    async def get_maimai_profile(self, token: str) -> Dict[str, Any]:
+        """获取 Maimai 玩家资料"""
+        base_url = self.api_base_url.rstrip("/")
+        url = urljoin(base_url + "/", "api/game/maimai2/profile")
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}"
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as resp:
+                resp.raise_for_status()
+                return await resp.json()
+
+    async def get_maimai_music_list(self) -> List[Dict[str, Any]]:
+        """获取 Maimai 音乐列表"""
+        logger.info("[Net API] 开始获取 Maimai 音乐列表...")
+        # Maimai 音乐列表 API 路径推测为 api/game/maimai2/data/musicList
+        resp = await self._request("GET", "api/game/maimai2/data/musicList", timeout=120)
         if isinstance(resp, list):
-            logger.info(f"[Net API] 音乐列表获取成功，共 {len(resp)} 首")
+            logger.info(f"[Net API] Maimai 音乐列表获取成功，共 {len(resp)} 首")
             return resp
         result = resp.get("data", [])
-        logger.info(f"[Net API] 音乐列表获取成功，共 {len(result)} 首")
+        logger.info(f"[Net API] Maimai 音乐列表获取成功，共 {len(result)} 首")
         return result
+
+    async def get_maimai_general(self, token: str, key: str) -> Dict[str, Any]:
+        """
+        获取 Maimai 通用数据
+        """
+        base_url = self.api_base_url.rstrip("/")
+        url = urljoin(base_url + "/", "api/game/maimai2/general")
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}"
+        }
+        
+        params = {"key": key}
+        
+        logger.info(f"[Net API] 请求: GET {url} params={params}")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, params=params) as resp:
+                resp.raise_for_status()
+                response_text = await resp.text()
+                try:
+                    result = json.loads(response_text) if response_text else {}
+                    logger.info(f"[Net API] Maimai general 响应: {len(str(result))} 字符")
+                    return result
+                except json.JSONDecodeError:
+                    return {}
+
+    def get_maimai_jacket_url(self, music_id: int) -> str:
+        """获取 Maimai 音乐封面 URL"""
+        # 假设 ID 是数字，需要补零到 4 位 (或者 5 位? Maimai ID 经常是 5 位，如 10001)
+        # 暂时尝试 6 位? Maimai DX 通常是 1xxxx.
+        # 按照 Nageki 的习惯，通常是 padded string.
+        # 观察 Ongeki 是 4 位。
+        # Maimai 封面通常路径是 .../maimai2/jacket/UI_Jacket_XXXXXX.webp ?
+        # 让我们先假设是不补零或者补零到6位。Maimai ID范围很大。
+        # 暂时使用 padded 6位 (000001) 或者 5位。
+        # 标准 Maimai ID: 1 ~ 1000+ (Standard), 10001 ~ (DX).
+        # 还是先假设直接使用 ID 字符串，或者 padded 6位。
+        # 这里的 cdn_base_url 是 "https://cdn-nageki-next.sys-all.com.cn"
+        # 访问 web/assets/maimai2/jacket/UI_Jacket_{id}.png ?
+        # 参照 Ongeki: web/assets/ongeki/jacket/UI_Jacket_{padded_id}_{size}.webp
+        
+        # 简单处理：先转字符串，不补零试试，或者补零到6位。
+        # 大部分 Maimai 资源库习惯用 6 位。
+        padded_id = str(music_id).zfill(6)
+        # 注意 Maimai 只有一种封面尺寸通常
+        url = f"{self.cdn_base_url}/web/assets/maimai2/jacket/UI_Jacket_{padded_id}.webp"
+        return url
+
     
-    def get_jacket_url(self, music_id: int, size: str = "S") -> str:
+    def get_jacket_url(self, music_id: int, size: str = "S", game: str = "ongeki") -> str:
         """获取音乐封面 URL"""
+        if game == "maimai":
+             return self.get_maimai_jacket_url(music_id)
+             
         padded_id = str(music_id).zfill(4)
         url = f"{self.cdn_base_url}/web/assets/ongeki/jacket/UI_Jacket_{padded_id}_{size}.webp"
         # logger.debug(f"[图片] 生成封面URL: {url}")
@@ -326,16 +393,17 @@ class NagekiApiClient:
         self,
         music_id: int,
         size: str = "S",
-        cache: bool = True
+        cache: bool = True,
+        game: str = "ongeki"
     ) -> Optional[bytes]:
         """获取音乐封面图片（带缓存）"""
-        url = self.get_jacket_url(music_id, size)
+        url = self.get_jacket_url(music_id, size, game)
         
         if cache and self.cache_dir:
             cache_path = os.path.join(
                 self.cache_dir,
                 "images",
-                f"jacket_{music_id}_{size}.webp"
+                f"{game}_jacket_{music_id}_{size}.webp"
             )
             if os.path.exists(cache_path):
                 with open(cache_path, "rb") as f:

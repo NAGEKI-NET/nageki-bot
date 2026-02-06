@@ -41,6 +41,132 @@ class RatingDataProcessor:
                 for music in self.music_list:
                     self.music_cache[music.get("id")] = music
     
+    async def load_maimai_music_list(self):
+        """加载 Maimai 音乐列表"""
+        if not self.music_list:
+            self.music_list = await self.api_client.get_maimai_music_list()
+            # 这里不覆盖 Ongeki 的缓存文件，或者是使用不同的文件名？
+            # 简单起见，不保存到文件或使用不同逻辑
+            self.music_cache = {}
+            for music in self.music_list:
+                self.music_cache[music.get("id")] = music
+
+    def parse_maimai_rating_data(self, property_value: str) -> List[Dict[str, Any]]:
+        """解析 Maimai Rating 数据字符串"""
+        if not property_value:
+            return []
+            
+        items = []
+        # 假设格式: musicId:level:achievement:...?
+        # 或者是 JSON 字符串? 
+        # 根据 Nageki 通用逻辑，通常是 comma separated string
+        records = property_value.split(",")
+        for record in records:
+            if not record:
+                continue
+            parts = record.split(":")
+            if len(parts) < 3:
+                continue
+            
+            try:
+                music_id = int(parts[0])
+                level_index = int(parts[1]) # 0-4
+                achievement = int(parts[2])
+                
+                # 获取音乐信息
+                music_info = self.music_cache.get(music_id)
+                chart_constant = 0.0
+                rating = 0
+                
+                if music_info:
+                    chart_constant = RatingCalculator.get_chart_constant(music_info, level_index)
+                    rating = RatingCalculator.calculate_maimai_rating(chart_constant, achievement)
+                
+                item = {
+                    "musicId": music_id,
+                    "level": level_index,
+                    "value": achievement, # 分数/达成率
+                    "chartConstant": chart_constant,
+                    "rating": rating,
+                    "musicInfo": music_info,
+                    "fullMusicInfo": {"music": music_info} if music_info else None
+                }
+                items.append(item)
+            except Exception as e:
+                continue
+                
+        # 按 Rating 排序
+        items.sort(key=lambda x: x["rating"], reverse=True)
+        return items
+
+    async def process_maimai_rating_data(self, token: str):
+        """处理 Maimai B50 数据"""
+        await self.load_maimai_music_list()
+        
+        # 获取 Profile
+        profile = await self.api_client.get_maimai_profile(token)
+        
+        # 获取 Standard (Old) 数据
+        old_data_raw = await self.api_client.get_maimai_general(token, "recent_rating")
+        old_str = ""
+        if old_data_raw and "userGeneralData" in old_data_raw:
+             for d in old_data_raw["userGeneralData"]:
+                 if d.get("key") == "recent_rating":
+                     old_str = d.get("propertyValue", "")
+                     break
+        
+        # 获取 DX (New) 数据
+        new_data_raw = await self.api_client.get_maimai_general(token, "recent_rating_new")
+        new_str = ""
+        if new_data_raw and "userGeneralData" in new_data_raw:
+             for d in new_data_raw["userGeneralData"]:
+                 if d.get("key") == "recent_rating_new":
+                     new_str = d.get("propertyValue", "")
+                     break
+                     
+        old_items = self.parse_maimai_rating_data(old_str)
+        new_items = self.parse_maimai_rating_data(new_str)
+        
+        # 取 Top 35 (DX) 和 Top 15 (Standard) ?
+        # 或者 Standard 25 + DX 15?
+        # 通常 Maimai DX B50 = Standard (Old) 25/35 + DX (New) 15/25
+        # 现行版本 (Buddies) 是 35 New + 15 Old ? 
+        # 也有可能是 35 Standard + 15 New (Splashed)?
+        # 让我们展示所有获取到的，并在 title 中标明
+        # 为了 B50，我们取前 35 和 前 15？
+        # 用户可能只想要 B50 图。
+        # 假设 Old 是 Standard (Standard 谱面), New 是 DX (DX 谱面)
+        # Nageki API 的 recent_rating 和 recent_rating_new 可能对应 Old / New 歌曲分类
+        # 还是 Standard / DX 谱面分类？
+        # 通常 recent_rating = Old Songs (Standard Charts + DX Charts of Old Songs?) -> Standard Division
+        # recent_rating_new = New Songs (Current Version Songs) -> New Division
+        
+        # 按照现有 bot 习惯:
+        # Standard List (Old) -> Max 35
+        # New List (New) -> Max 15
+        # (Total 50)
+        
+        # 限制数量
+        old_items = old_items[:35] 
+        new_items = new_items[:15]
+        
+        categories = [
+            {
+                "title": "Standard (Old)", 
+                "items": old_items,
+                "averageRating": RatingCalculator.calculate_average_rating(old_items),
+                "totalRating": RatingCalculator.calculate_total_rating(old_items)
+            },
+            {
+                "title": "New (DX)",
+                "items": new_items,
+                "averageRating": RatingCalculator.calculate_average_rating(new_items),
+                "totalRating": RatingCalculator.calculate_total_rating(new_items)
+            }
+        ]
+        
+        return profile, categories
+
     def parse_rating_category(self, property_value: str, is_pscore: bool = False) -> List[Dict[str, Any]]:
         """
         解析 Rating 分类数据

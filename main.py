@@ -82,6 +82,10 @@ class NagekiBot(Star):
         elif message_str == "nageki rating":
             async for result in self._handle_rating_command(event):
                 yield result
+        # 处理 B50 命令：nageki b50
+        elif message_str == "nageki b50":
+            async for result in self._handle_b50_command(event):
+                yield result
         # 处理健康检查命令：nageki health
         elif message_str == "nageki health":
             async for result in self._handle_health_command(event):
@@ -411,6 +415,97 @@ class NagekiBot(Star):
                 yield event.plain_result(f"生成图片时发生错误: {str(e)}")
         except Exception as e:
             logger.error(f"Rating命令处理出错: {e}", exc_info=True)
+            yield event.plain_result(f"发生错误: {str(e)}")
+
+    async def _handle_b50_command(self, event: AstrMessageEvent):
+        """处理 B50 命令：nageki b50"""
+        try:
+            if not self.api_client.bot_api_key:
+                yield event.plain_result(
+                    "未配置 BOT_API_KEY，无法使用QQ机器人功能。\n"
+                    "请在环境变量中设置 BOT_API_KEY。"
+                )
+                return
+            
+            # 从事件中获取发送者的QQ号
+            sender = event.message_obj.sender
+            qq_number = None
+            if hasattr(sender, 'id'):
+                qq_number = str(sender.id)
+            elif hasattr(sender, 'user_id'):
+                qq_number = str(sender.user_id)
+            elif hasattr(sender, 'qq'):
+                qq_number = str(sender.qq)
+            
+            if not qq_number and hasattr(event.message_obj, 'raw_message'):
+                raw = event.message_obj.raw_message
+                if hasattr(raw, 'user_id'):
+                    qq_number = str(raw.user_id)
+                elif hasattr(raw, 'sender') and hasattr(raw.sender, 'user_id'):
+                    qq_number = str(raw.sender.user_id)
+            
+            if not qq_number:
+                logger.error(f"无法获取QQ号，sender对象: {sender}")
+                yield event.plain_result("无法获取您的QQ号，请稍后重试")
+                return
+            
+            yield event.plain_result("正在生成 Maimai B50 图片，请稍候...")
+            
+            logger.info(f"[B50命令] 开始处理 QQ号: {qq_number}")
+            
+            # 1. 获取 Token
+            token_result = await self.api_client.bot_get_token(qq_number)
+            token = token_result.get("token")
+            
+            if not token:
+                logger.error(f"[B50命令] 获取Token失败: {token_result}")
+                yield event.plain_result("获取Token失败，请确认该QQ号已绑定。请前往 https://next.nageki-net.com/net/profile 绑定QQ账号")
+                return
+            
+            logger.info(f"[B50命令] Token获取成功")
+            
+            # 2. 处理数据
+            logger.info(f"[B50命令] 开始处理B50数据...")
+            processor = RatingDataProcessor(self.api_client)
+            # 使用新的处理 Maimai 数据的函数
+            profile, categories = await processor.process_maimai_rating_data(token)
+            logger.info(f"[B50命令] 数据处理完成: Profile={profile.get('userName')}, Categories={len(categories)}")
+            
+            # 3. 生成图片
+            plugin_dir = os.path.dirname(__file__)
+            output_dir = os.path.join(plugin_dir, "assets")
+            output_path = os.path.join(output_dir, "nageki_b50.png")
+            
+            logger.info(f"[B50命令] 开始绘制图片: {output_path}")
+            # 使用 game="maimai" 参数
+            actual_path = await generate_rating_canvas_image(
+                output_path,
+                profile,
+                categories,
+                api_client=self.api_client,
+                game="maimai"
+            )
+            logger.info(f"[B50命令] 图片绘制完成: {actual_path}")
+            
+            # 4. 发送图片
+            logger.info(f"[B50命令] 准备发送图片")
+            yield event.image_result(actual_path)
+            logger.info(f"[B50命令] 图片已发送")
+            
+        except aiohttp.ClientResponseError as e:
+            logger.error(f"[B50命令] HTTP错误: 状态码={e.status}, 消息={e.message}")
+            if e.status == 401:
+                yield event.plain_result(f"认证失败：请检查 BOT_API_KEY 是否正确，或该QQ号未绑定。请前往 https://next.nageki-net.com/net/profile 绑定QQ账号")
+            else:
+                yield event.plain_result(f"请求失败：服务器返回错误 {e.status}")
+        except RuntimeError as e:
+            if "Pillow" in str(e):
+                yield event.plain_result("当前环境未安装 pillow，无法绘制图片。")
+            else:
+                logger.error(f"生成图片错误: {e}", exc_info=True)
+                yield event.plain_result(f"生成图片时发生错误: {str(e)}")
+        except Exception as e:
+            logger.error(f"B50命令处理出错: {e}", exc_info=True)
             yield event.plain_result(f"发生错误: {str(e)}")
 
     async def _handle_health_command(self, event: AstrMessageEvent):

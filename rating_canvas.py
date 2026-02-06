@@ -21,7 +21,8 @@ async def generate_rating_canvas_image(
     output_path: str,
     profile: Dict[str, Any],
     categories: List[Dict[str, Any]],
-    api_client=None
+    api_client=None,
+    game: str = "ongeki"
 ) -> str:
     """
     使用 Pillow 绘制与前端 Rating 页布局相近的图片，并保存到 output_path。
@@ -55,6 +56,7 @@ async def generate_rating_canvas_image(
         1: {"bg": mix_color(card_bg_color, (124, 45, 18), 0.5), "text": (254, 215, 170)},  # Advanced
         2: {"bg": mix_color(card_bg_color, (127, 29, 29), 0.5), "text": (254, 202, 202)},  # Expert
         3: {"bg": mix_color(card_bg_color, (88, 28, 135), 0.5), "text": (233, 213, 255)},  # Master
+        4: {"bg": mix_color(card_bg_color, (217, 70, 239), 0.5), "text": (250, 232, 255)}, # Re:Master (Pink/Purple)
         10: {"bg": (31, 41, 55), "text": (220, 38, 38), "border": (220, 38, 38)}           # Lunatic
     }
 
@@ -90,7 +92,7 @@ async def generate_rating_canvas_image(
         logger.info(f"[绘图] 准备并发下载 {len(all_music_ids)} 张封面图...")
         music_id_list = list(all_music_ids)
         # 此时 get_jacket_image 已经支持内部 timeout (默认10s)
-        tasks = [api_client.get_jacket_image(mid, size="S", cache=True) for mid in music_id_list]
+        tasks = [api_client.get_jacket_image(mid, size="S", cache=True, game=game) for mid in music_id_list]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         success_count = 0
