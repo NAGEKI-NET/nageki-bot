@@ -8,6 +8,7 @@ from .nageki_api import NagekiApiClient, NagekiApiException
 from .rating_data import RatingDataProcessor
 from .rating_canvas import generate_rating_canvas_image
 from .profile_canvas import generate_profile_canvas_image
+from .profile_browser import generate_profile_browser_image
 
 
 @register("nageki-bot", "NagekiBot", "Nageki-Net Rating 查询插件，支持完整的 API 获取、图片获取、数据分析功能", "1.0.0")
@@ -296,11 +297,19 @@ class NagekiBot(Star):
             output_dir = os.path.join(plugin_dir, "assets")
             output_path = os.path.join(output_dir, "nageki_profile.png")
 
-            actual_path = await generate_profile_canvas_image(
-                output_path,
-                result,
-                api_client=self.api_client
-            )
+            try:
+                actual_path = await generate_profile_browser_image(
+                    output_path,
+                    result,
+                    api_client=self.api_client
+                )
+            except Exception as browser_error:
+                logger.warning(f"[查询资料命令] 浏览器截图失败，回退到 canvas: {browser_error}")
+                actual_path = await generate_profile_canvas_image(
+                    output_path,
+                    result,
+                    api_client=self.api_client
+                )
             yield event.image_result(actual_path)
             
         except aiohttp.ClientResponseError as e:

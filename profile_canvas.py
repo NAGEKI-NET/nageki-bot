@@ -1,6 +1,7 @@
 import io
 import logging
 import os
+import re
 from typing import Any, Dict, Tuple
 
 try:
@@ -43,54 +44,55 @@ async def generate_profile_canvas_image(
     plugin_dir = os.path.dirname(__file__)
     fonts_dir = os.path.join(plugin_dir, "assets", "fonts")
 
-    def load_font(size: int, bold: bool = False):
-        candidates = []
-        if bold:
-            candidates.extend(
-                [
-                    os.path.join(fonts_dir, "segoeuib.ttf"),
-                    os.path.join(fonts_dir, "BIZ-UDGothicB.ttc"),
-                    os.path.join(fonts_dir, "msgothic.ttc"),
-                ]
-            )
-        else:
-            candidates.extend(
-                [
-                    os.path.join(fonts_dir, "segoeui.ttf"),
-                    os.path.join(fonts_dir, "BIZ-UDGOTHICR.TTC"),
-                    os.path.join(fonts_dir, "msgothic.ttc"),
-                ]
-            )
-        for path in candidates:
+    def load_font_candidates(paths, size: int):
+        for path in paths:
             if os.path.exists(path):
                 try:
                     return ImageFont.truetype(path, size)
                 except Exception:
                     continue
-        return ImageFont.load_default()
+        return None
 
-    title_font = load_font(42, bold=True)
-    subtitle_font = load_font(20)
-    h1_font = load_font(34, bold=True)
-    h2_font = load_font(22, bold=True)
-    body_font = load_font(18)
-    small_font = load_font(15)
-    big_stat_font = load_font(50, bold=True)
-    rating_font = load_font(54, bold=True)
-    signature_font = load_font(22)
+    def load_font_pair(size: int, bold: bool = False):
+        latin_paths = [os.path.join(fonts_dir, "segoeuib.ttf" if bold else "segoeui.ttf")]
+        cjk_paths = [
+            os.path.join(fonts_dir, "BIZ-UDGothicB.ttc" if bold else "BIZ-UDGOTHICR.TTC"),
+            os.path.join(fonts_dir, "msgothic.ttc"),
+        ]
+        latin_font = load_font_candidates(latin_paths, size)
+        cjk_font = load_font_candidates(cjk_paths, size)
+        fallback = ImageFont.load_default()
+        return (latin_font or cjk_font or fallback, cjk_font or latin_font or fallback)
+
+    title_font = load_font_pair(42, bold=True)
+    subtitle_font = load_font_pair(20)
+    h1_font = load_font_pair(34, bold=True)
+    h2_font = load_font_pair(22, bold=True)
+    body_font = load_font_pair(18)
+    small_font = load_font_pair(15)
+    stat_value_font = load_font_pair(44, bold=True)
+    rating_font = load_font_pair(52, bold=True)
+    signature_font = load_font_pair(22)
 
     def round_rect(box, radius=18, fill=None, outline=None, width_=1):
         draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width_)
 
-    def text(xy, value, font, fill, anchor="la"):
-        draw.text(xy, str(value), font=font, fill=fill, anchor=anchor)
+    def pick_font(font_pair, value: str):
+        text_value = str(value)
+        if re.search(r"[\u3000-\u303f\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]", text_value):
+            return font_pair[1]
+        return font_pair[0]
 
-    def wrap_text(value: str, font, max_width: int, max_lines: int = 2):
+    def text(xy, value, font_pair, fill, anchor="la"):
+        draw.text(xy, str(value), font=pick_font(font_pair, value), fill=fill, anchor=anchor)
+
+    def wrap_text(value: str, font_pair, max_width: int, max_lines: int = 2):
         words = []
         current = ""
+        target_font = pick_font(font_pair, value)
         for ch in value:
             candidate = current + ch
-            if draw.textlength(candidate, font=font) <= max_width:
+            if draw.textlength(candidate, font=target_font) <= max_width:
                 current = candidate
                 continue
             if current:
@@ -102,7 +104,7 @@ async def generate_profile_canvas_image(
             words.append(current)
         if len(words) == max_lines and "".join(words) != value:
             last = words[-1]
-            while last and draw.textlength(last + "...", font=font) > max_width:
+            while last and draw.textlength(last + "...", font=target_font) > max_width:
                 last = last[:-1]
             words[-1] = last + "..."
         return words
@@ -178,8 +180,8 @@ async def generate_profile_canvas_image(
     avatar = await fetch_image(avatar_url, (96, 96))
     chara = await fetch_image(chara_url, (320, 520), contain=True)
 
-    text((padding, 60), "ONGEKI Profile", title_font, colors["text"])
-    text((padding, 102), "Profile card rendered from the web layout", subtitle_font, colors["subtle"])
+    text((padding, 60), "个人资料", title_font, colors["text"])
+    text((padding, 102), "查看您的游戏资料", subtitle_font, colors["subtle"])
 
     main_card = (padding, 140, width - padding, 700)
     round_rect(main_card, radius=28, fill=colors["card"], outline=(226, 232, 240), width_=2)
@@ -190,6 +192,7 @@ async def generate_profile_canvas_image(
 
     header_x = padding + 36
     header_y = 190
+    content_right = chara_panel[0] - 36
     text((header_x, header_y), profile.get("userName", "Unknown"), h1_font, colors["text"])
 
     avatar_x = header_x
@@ -201,41 +204,45 @@ async def generate_profile_canvas_image(
     exp_x = avatar_x + 124
     exp_y = avatar_y + 8
     current_exp, required_exp, progress = get_exp_progress()
-    text((exp_x, exp_y), "EXP", body_font, colors["subtle"])
-    text((exp_x + 520, exp_y), f"{current_exp}/{required_exp}", small_font, colors["subtle"], anchor="ra")
-    bar_box = (exp_x, exp_y + 32, exp_x + 520, exp_y + 48)
+    text((exp_x, exp_y), "经验值", body_font, colors["subtle"])
+    text((content_right, exp_y), f"{current_exp}/{required_exp}", small_font, colors["subtle"], anchor="ra")
+    bar_box = (exp_x, exp_y + 32, content_right, exp_y + 50)
     round_rect(bar_box, radius=8, fill=(229, 231, 235))
     fill_width = int((bar_box[2] - bar_box[0]) * progress)
     if fill_width > 0:
         draw.rounded_rectangle((bar_box[0], bar_box[1], bar_box[0] + fill_width, bar_box[3]), radius=8, fill=colors["blue"])
 
     current_rating, highest_rating = format_rating()
-    left_width = 760
-    rating_box = (header_x, 390, header_x + left_width - 24, 500)
-    round_rect(rating_box, radius=22, fill=(243, 244, 255))
-    text((rating_box[0] + 26, rating_box[1] + 26), "Current Rating", h2_font, colors["text"])
-    text((rating_box[0] + 26, rating_box[1] + 82), current_rating, rating_font, colors["blue"])
-    text((rating_box[0] + 290, rating_box[1] + 94), f"(Highest: {highest_rating})", body_font, colors["subtle"])
+    section_top = 390
+    section_gap = 18
+    rating_box_w = 530
+    rating_box = (header_x, section_top, header_x + rating_box_w, section_top + 138)
+    round_rect(rating_box, radius=22, fill=(239, 242, 255))
+    text((rating_box[0] + 28, rating_box[1] + 24), "当前评分", h2_font, colors["text"])
+    text((rating_box[0] + 28, rating_box[1] + 92), current_rating, rating_font, colors["blue"])
+    text((rating_box[0] + 295, rating_box[1] + 98), f"(最高: {highest_rating})", body_font, colors["subtle"])
 
-    stat_gap = 16
-    stat_top = 528
-    stat_w = (left_width - stat_gap * 2 - 24) // 3
-    stat_h = 122
+    stat_top = section_top
+    stats_x = rating_box[2] + section_gap
+    stat_area_w = content_right - stats_x
+    stat_gap = 14
+    stat_w = (stat_area_w - stat_gap * 2) // 3
+    stat_h = 138
     stats = [
-        ("Level", profile.get("level", 0), (239, 246, 255), colors["blue"]),
-        ("Play Count", f"{int(profile.get('playCount', 0) or 0):,}", (240, 253, 244), colors["green"]),
-        ("Ranking", f"#{profile.get('userRanking', 'N/A')}", (255, 247, 237), colors["orange"]),
+        ("等级", profile.get("level", 0), (239, 246, 255), colors["blue"]),
+        ("游玩次数", f"{int(profile.get('playCount', 0) or 0):,}", (240, 253, 244), colors["green"]),
+        ("排名", f"#{profile.get('userRanking', 'N/A')}", (255, 247, 237), colors["orange"]),
     ]
     for idx, (label, value, fill, accent) in enumerate(stats):
-        x1 = header_x + idx * (stat_w + stat_gap)
+        x1 = stats_x + idx * (stat_w + stat_gap)
         box = (x1, stat_top, x1 + stat_w, stat_top + stat_h)
         round_rect(box, radius=20, fill=fill)
-        text((x1 + stat_w / 2, stat_top + 46), value, big_stat_font, accent, anchor="ma")
-        text((x1 + stat_w / 2, stat_top + 92), label, body_font, colors["subtle"], anchor="ma")
+        text((x1 + stat_w / 2, stat_top + 58), value, stat_value_font, accent, anchor="ma")
+        text((x1 + stat_w / 2, stat_top + 110), label, body_font, colors["subtle"], anchor="ma")
 
     tech_card = (padding, 736, width - padding, 1030)
     round_rect(tech_card, radius=28, fill=colors["card"], outline=(226, 232, 240), width_=2)
-    text((padding + 36, 778), "Technical Score Stats", h2_font, colors["text"])
+    text((padding + 36, 778), "技术分统计", h2_font, colors["text"])
 
     def avg_score(sum_key: str, cnt_key: str) -> str:
         score = int(profile.get(sum_key, 0) or 0)
@@ -266,13 +273,13 @@ async def generate_profile_canvas_image(
         y1 = grid_y + row * (cell_h + grid_gap_y)
         box = (x1, y1, x1 + cell_w, y1 + cell_h)
         round_rect(box, radius=18, fill=fill)
-        text((x1 + cell_w / 2, y1 + 28), score, h2_font, accent, anchor="ma")
-        text((x1 + cell_w / 2, y1 + 54), label, small_font, colors["subtle"], anchor="ma")
-        text((x1 + cell_w / 2, y1 + 72), f"{songs} songs", small_font, colors["subtle"], anchor="ma")
+        text((x1 + cell_w / 2, y1 + 26), score, h2_font, accent, anchor="ma")
+        text((x1 + cell_w / 2, y1 + 50), label, small_font, colors["subtle"], anchor="ma")
+        text((x1 + cell_w / 2, y1 + 70), f"{songs} 首", small_font, colors["subtle"], anchor="ma")
 
     sign_card = (padding, 1066, width - padding, 1210)
     round_rect(sign_card, radius=28, fill=colors["card"], outline=(226, 232, 240), width_=2)
-    text((padding + 36, 1108), "Signature", h2_font, colors["text"])
+    text((padding + 36, 1108), "个性签名", h2_font, colors["text"])
     signature = (profile.get("profileContent") or "").strip() or "这个玩家还没有设置个性签名。"
     sig_box = (padding + 36, 1140, width - padding - 36, 1188)
     round_rect(sig_box, radius=16, fill=(249, 250, 251))
