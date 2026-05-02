@@ -243,15 +243,18 @@ def _render_profile_html(profile: Dict[str, Any], api_client) -> str:
     .stat.play {{ background: #f0fdf4; }}
     .stat.rank {{ background: #fff7ed; }}
     .stat-value {{
-      font-size: 64px;
+      font-size: 48px;
       font-weight: 900;
       line-height: 1;
       white-space: nowrap;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.03em;
     }}
     .stat.level .stat-value {{ color: var(--blue); }}
     .stat.play .stat-value {{ color: var(--green); }}
     .stat.rank .stat-value {{ color: var(--orange); }}
+    .stat.level .stat-value {{ font-size: 64px; }}
+    .stat.play .stat-value {{ font-size: 44px; }}
+    .stat.rank .stat-value {{ font-size: 40px; }}
     .stat-label {{
       margin-top: 10px;
       font-size: 22px;
