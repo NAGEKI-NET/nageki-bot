@@ -7,6 +7,7 @@ import aiohttp
 from .nageki_api import NagekiApiClient, NagekiApiException
 from .rating_data import RatingDataProcessor
 from .rating_canvas import generate_rating_canvas_image
+from .profile_canvas import generate_profile_canvas_image
 
 
 @register("nageki-bot", "NagekiBot", "Nageki-Net Rating 查询插件，支持完整的 API 获取、图片获取、数据分析功能", "1.0.0")
@@ -291,42 +292,16 @@ class NagekiBot(Star):
             logger.info(f"[查询资料命令] Net API返回数据: {result}")
             logger.info(f"[查询资料命令] Net API返回数据的所有键: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
             
-            # 格式化输出用户资料
-            # 根据提供的JSON结构映射字段
-            
-            # Rating 处理: 
-            # newPlayerRating: 19032 -> 19.032 (除以1000)
-            # playerRating: 1490 -> 14.90 (除以100)
-            
-            new_rating = result.get('newPlayerRating')
-            if new_rating:
-                current_rating_str = f"{new_rating / 1000:.3f}"
-            else:
-                current_rating_str = f"{result.get('playerRating', 0) / 100:.2f}"
-            
-            new_max = result.get('newHighestRating')
-            if new_max:
-                max_rating_str = f"{new_max / 1000:.3f}"
-            else:
-                max_rating_str = f"{result.get('highestRating', 0) / 100:.2f}"
-            
-            # 排名处理
-            ranking = result.get('userRanking', 0)
-            total_players = result.get('player', 0)
-            
-            
-            profile_text = (
-                f"玩家名：{result.get('userName', username)}\n"
-                f"等级：{result.get('level', 0)}\n"
-                # f"转生次数：{result.get('reincarnationNum', 0)}\n" # JSON无此字段
-                f"当前Rating：{current_rating_str}\n"
-                f"最高Rating：{max_rating_str}\n"
-                # f"战斗点数：{result.get('battlePoint', 0)}\n"
-                f"总游玩次数：{result.get('playCount', 0)}\n"
-                f"排名：{ranking}\n"
+            plugin_dir = os.path.dirname(__file__)
+            output_dir = os.path.join(plugin_dir, "assets")
+            output_path = os.path.join(output_dir, "nageki_profile.png")
+
+            actual_path = await generate_profile_canvas_image(
+                output_path,
+                result,
+                api_client=self.api_client
             )
-            
-            yield event.plain_result(profile_text)
+            yield event.image_result(actual_path)
             
         except aiohttp.ClientResponseError as e:
             logger.error(f"[查询资料命令] HTTP错误: 状态码={e.status}, 消息={e.message}")
@@ -336,6 +311,12 @@ class NagekiBot(Star):
                 yield event.plain_result(f"未找到该QQ号的绑定信息，请前往 https://next.nageki-net.com/net/profile 绑定QQ账号")
             else:
                 yield event.plain_result(f"查询失败：服务器返回错误 {e.status}")
+        except RuntimeError as e:
+            if "Pillow" in str(e):
+                yield event.plain_result("当前环境未安装 pillow，无法绘制图片。")
+            else:
+                logger.error(f"生成资料图片错误: {e}", exc_info=True)
+                yield event.plain_result(f"生成资料图片时发生错误: {str(e)}")
         except Exception as e:
             logger.error(f"查询资料命令处理出错: {e}", exc_info=True)
             yield event.plain_result(f"查询时发生错误: {str(e)}")
