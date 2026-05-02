@@ -142,8 +142,6 @@ def _render_profile_html(profile: Dict[str, Any], api_client) -> str:
       font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", sans-serif;
     }}
     .page {{ padding: 48px; width: 1600px; height: 1280px; }}
-    .title {{ font-size: 58px; font-weight: 800; line-height: 1; margin: 20px 0 10px; }}
-    .subtitle {{ font-size: 24px; color: var(--subtle); margin-bottom: 28px; }}
     .card {{
       background: var(--card);
       border: 1px solid var(--line);
@@ -305,9 +303,6 @@ def _render_profile_html(profile: Dict[str, Any], api_client) -> str:
 </head>
 <body>
   <div class="page">
-    <div class="title">个人资料</div>
-    <div class="subtitle">查看您的游戏资料</div>
-
     <div class="card main-card">
       <div class="hero"><img src="{html.escape(chara_url)}" alt="character" /></div>
       <div class="content">
