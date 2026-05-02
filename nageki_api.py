@@ -48,7 +48,7 @@ class NagekiApiClient:
         
         # QQ机器人API配置（测试阶段默认使用localhost和测试密钥）
         # 默认使用测试密钥，方便测试
-        self.bot_api_key = bot_api_key or os.getenv("BOT_API_KEY", "THIS_IS_A_SAMPLE_API_KEY_REPLACE_ME")
+        self.bot_api_key = bot_api_key or os.getenv("BOT_API_KEY", "")
         # 默认使用localhost:8080，方便测试
         self.bot_api_url = bot_api_url or os.getenv("BOT_API_URL", "http://localhost:8080")
         

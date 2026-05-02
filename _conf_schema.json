@@ -1,0 +1,27 @@
+{
+  "NAGEKI_API_URL": {
+    "description": "Nageki-Net API 服务器地址",
+    "type": "string",
+    "default": "https://nageki-net.com/"
+  },
+  "NAGEKI_CDN_URL": {
+    "description": "Nageki-Net CDN 服务器地址",
+    "type": "string",
+    "default": "https://cdn-nageki-next.sys-all.com.cn"
+  },
+  "NAGEKI_TOKEN": {
+    "description": "Nageki-Net 登录后的 JWT Token，Rating 查询必填",
+    "type": "string",
+    "default": ""
+  },
+  "BOT_API_URL": {
+    "description": "QQ 机器人 API 地址，不使用绑定功能可留空",
+    "type": "string",
+    "default": "http://localhost:8080"
+  },
+  "BOT_API_KEY": {
+    "description": "QQ 机器人 API 密钥，不使用绑定功能可留空",
+    "type": "string",
+    "default": ""
+  }
+}

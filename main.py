@@ -11,10 +11,20 @@ from .rating_canvas import generate_rating_canvas_image
 
 @register("nageki-bot", "NagekiBot", "Nageki-Net Rating 查询插件，支持完整的 API 获取、图片获取、数据分析功能", "1.0.0")
 class NagekiBot(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: Context, config=None):
         super().__init__(context)
+        self.config = config
         self.api_client = None
         self._init_api_client()
+
+    def _get_plugin_config_value(self, key: str, default=None):
+        if self.config and key in self.config:
+            value = self.config.get(key)
+            if isinstance(value, str):
+                value = value.strip()
+            if value not in (None, ""):
+                return value
+        return os.getenv(key, default)
     
     def _init_api_client(self):
         """初始化 API 客户端"""
@@ -23,17 +33,18 @@ class NagekiBot(Star):
         
         # 从配置或环境变量获取 API 地址和 token
         # 注意：实际使用时需要配置这些值
-        api_url = os.getenv("NAGEKI_API_URL", "https://nageki-net.com/")
-        cdn_url = os.getenv("NAGEKI_CDN_URL", "https://cdn-nageki-next.sys-all.com.cn")
-        token = os.getenv("NAGEKI_TOKEN")  # 需要用户配置 JWT token
+        api_url = self._get_plugin_config_value("NAGEKI_API_URL", "https://nageki-net.com/")
+        cdn_url = self._get_plugin_config_value("NAGEKI_CDN_URL", "https://cdn-nageki-next.sys-all.com.cn")
+        token = self._get_plugin_config_value("NAGEKI_TOKEN")
         
         # QQ机器人API配置（测试阶段默认使用localhost和测试密钥）
         # 默认使用测试密钥，方便测试
-        bot_api_key = os.getenv("BOT_API_KEY", "HAO_CHI_JB_0_CM_HS7Kf2Q9Xl0WBZ8N3MVPY6R1UDCEe5j")
+        bot_api_key = self._get_plugin_config_value("BOT_API_KEY", "")
         # 默认使用localhost:8080，方便测试
-        bot_api_url = os.getenv("BOT_API_URL", "https://nageki-net.com")
+        bot_api_url = self._get_plugin_config_value("BOT_API_URL", "http://localhost:8080")
+        bot_api_key_source = "插件配置" if self.config and self.config.get("BOT_API_KEY") not in (None, "") else ("环境变量" if os.getenv("BOT_API_KEY") else "默认值")
         
-        logger.info(f"[初始化] BOT_API_KEY 来源: {'环境变量' if os.getenv('BOT_API_KEY') else '默认值'}")
+        logger.info(f"[初始化] BOT_API_KEY 来源: {bot_api_key_source}")
         logger.info(f"[初始化] BOT_API_KEY 长度: {len(bot_api_key) if bot_api_key else 0}")
         logger.info(f"[初始化] BOT_API_KEY 预览: {bot_api_key[:10] + '...' if bot_api_key and len(bot_api_key) > 10 else (bot_api_key or 'None')}")
         logger.info(f"[初始化] BOT_API_URL: {bot_api_url}")
@@ -97,7 +108,7 @@ class NagekiBot(Star):
             if not self.api_client.bot_api_key:
                 yield event.plain_result(
                     "未配置 BOT_API_KEY，无法使用QQ机器人功能。\n"
-                    "请在环境变量中设置 BOT_API_KEY。"
+                    "请在 AstrBot 插件配置中填写 BOT_API_KEY。"
                 )
                 return
             
@@ -181,7 +192,7 @@ class NagekiBot(Star):
             if not self.api_client.bot_api_key:
                 yield event.plain_result(
                     "未配置 BOT_API_KEY，无法使用QQ机器人功能。\n"
-                    "请在环境变量中设置 BOT_API_KEY。"
+                    "请在 AstrBot 插件配置中填写 BOT_API_KEY。"
                 )
                 return
             
@@ -227,7 +238,7 @@ class NagekiBot(Star):
             if not self.api_client.bot_api_key:
                 yield event.plain_result(
                     "未配置 BOT_API_KEY，无法使用QQ机器人功能。\n"
-                    "请在环境变量中设置 BOT_API_KEY。"
+                    "请在 AstrBot 插件配置中填写 BOT_API_KEY。"
                 )
                 return
             
@@ -335,7 +346,7 @@ class NagekiBot(Star):
             if not self.api_client.bot_api_key:
                 yield event.plain_result(
                     "未配置 BOT_API_KEY，无法使用QQ机器人功能。\n"
-                    "请在环境变量中设置 BOT_API_KEY。"
+                    "请在 AstrBot 插件配置中填写 BOT_API_KEY。"
                 )
                 return
             
@@ -423,7 +434,7 @@ class NagekiBot(Star):
             if not self.api_client.bot_api_key:
                 yield event.plain_result(
                     "未配置 BOT_API_KEY，无法使用QQ机器人功能。\n"
-                    "请在环境变量中设置 BOT_API_KEY。"
+                    "请在 AstrBot 插件配置中填写 BOT_API_KEY。"
                 )
                 return
             
@@ -514,7 +525,7 @@ class NagekiBot(Star):
             if not self.api_client.bot_api_key:
                 yield event.plain_result(
                     "未配置 BOT_API_KEY，无法使用QQ机器人功能。\n"
-                    "请在环境变量中设置 BOT_API_KEY。"
+                    "请在 AstrBot 插件配置中填写 BOT_API_KEY。"
                 )
                 return
             

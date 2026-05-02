@@ -24,43 +24,31 @@ uv run pip install pillow aiohttp
 
 ## 配置
 
-### 环境变量配置
+### AstrBot 插件配置
 
-在运行 AstrBot 前，设置以下环境变量：
+现在可以直接在 AstrBot 后台填写插件配置，不需要提前手动设置环境变量。
 
-```bash
-# API 服务器地址（可选，默认：https://nageki-net.com/）
-export NAGEKI_API_URL="https://nageki-net.com/"
+在 AstrBot 中打开本插件配置后，填写以下字段：
 
-# CDN 服务器地址（可选，默认：https://cdn-nageki-next.sys-all.com.cn）
-export NAGEKI_CDN_URL="https://cdn-nageki-next.sys-all.com.cn"
-
-# JWT Token（必需，从 Nageki-Net 网站登录后获取）
-export NAGEKI_TOKEN="your_jwt_token_here"
-
-# QQ机器人API配置（可选，用于QQ机器人功能）
-export BOT_API_URL="http://localhost:8080"
-export BOT_API_KEY="your_secure_api_key_here"
+```text
+NAGEKI_API_URL = https://nageki-net.com/
+NAGEKI_CDN_URL = https://cdn-nageki-next.sys-all.com.cn
+NAGEKI_TOKEN = 从 Nageki-Net 网站登录后获取的 JWT Token
+BOT_API_URL = http://localhost:8080
+BOT_API_KEY = 你的 QQ 机器人 API 密钥
 ```
 
-### Windows PowerShell 配置示例
-
-```powershell
-$env:NAGEKI_API_URL="https://nageki-net.com/"
-$env:NAGEKI_CDN_URL="https://cdn-nageki-next.sys-all.com.cn"
-$env:NAGEKI_TOKEN="your_jwt_token_here"
-
-# QQ机器人API配置（可选）
-$env:BOT_API_URL="http://localhost:8080"
-$env:BOT_API_KEY="your_secure_api_key_here"
-```
+说明：
+- `NAGEKI_TOKEN` 为 Rating 查询必填。
+- `BOT_API_URL` 和 `BOT_API_KEY` 仅在使用 QQ 绑定、查绑、资料查询等功能时需要填写。
+- 为兼容旧部署方式，插件仍支持从环境变量读取同名配置；如果插件配置里已填写，会优先使用插件配置。
 
 ## 使用方法
 
 ### 基础功能（Rating查询）
 
 1. 确保已安装依赖（pillow、aiohttp）
-2. 配置环境变量（特别是 `NAGEKI_TOKEN`）
+2. 在 AstrBot 插件配置中填写参数（特别是 `NAGEKI_TOKEN`）
 3. 重启 AstrBot 以加载插件
 4. 在聊天中发送消息：`nageki`
 5. 插件会自动获取数据、下载图片、计算 Rating，并生成图片回复
@@ -110,7 +98,7 @@ python test_rating_style.py
 2. **网络连接**：需要能够访问 Nageki-Net API 和 CDN
 3. **首次运行**：首次运行会下载音乐列表和封面图片，可能需要一些时间
 4. **缓存**：数据会缓存到本地，后续运行会更快
-5. **QQ机器人API**：使用QQ机器人功能需要配置 `BOT_API_KEY`，确保API密钥安全
+5. **QQ机器人API**：使用QQ机器人功能需要在 AstrBot 插件配置中填写 `BOT_API_KEY`，并确保 API 密钥安全
 6. **API地址**：默认QQ机器人API地址为 `http://localhost:8080`，可根据实际情况修改
 
 ## 开发说明
