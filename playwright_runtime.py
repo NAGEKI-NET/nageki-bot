@@ -23,6 +23,14 @@ def _install_timeout() -> int:
         return 600
 
 
+def get_browser_timeout_ms() -> int:
+    raw_value = os.getenv("NAGEKI_PLAYWRIGHT_BROWSER_TIMEOUT", "60")
+    try:
+        return max(5, int(raw_value)) * 1000
+    except ValueError:
+        return 60_000
+
+
 def _get_install_lock() -> asyncio.Lock:
     global _install_lock
     if _install_lock is None:
@@ -92,6 +100,7 @@ def _looks_like_missing_browser(error: Exception) -> bool:
 
 async def launch_playwright_chromium(playwright, **kwargs):
     await ensure_playwright_chromium(playwright)
+    kwargs.setdefault("timeout", get_browser_timeout_ms())
 
     try:
         return await playwright.chromium.launch(**kwargs)

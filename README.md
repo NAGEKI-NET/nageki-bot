@@ -43,6 +43,7 @@ NAGEKI_RATING_RENDER_URL = http://localhost:4200/render/ongeki-rating
 NAGEKI_PROFILE_RENDER_THEME = dark
 NAGEKI_PROFILE_RENDER_LANGUAGE = zh
 NAGEKI_PLAYWRIGHT_AUTO_INSTALL = true
+NAGEKI_PLAYWRIGHT_BROWSER_TIMEOUT = 60
 NAGEKI_PLAYWRIGHT_INSTALL_TIMEOUT = 600
 BOT_API_URL = http://localhost:8080
 BOT_API_KEY = 你的 QQ 机器人 API 密钥
@@ -55,6 +56,7 @@ BOT_API_KEY = 你的 QQ 机器人 API 密钥
 - `NAGEKI_PROFILE_RENDER_THEME` 控制前端截图主题，可填 `dark` 或 `light`。
 - `NAGEKI_PROFILE_RENDER_LANGUAGE` 控制前端截图语言，可填 `zh`、`en` 或 `ja`。
 - `NAGEKI_PLAYWRIGHT_AUTO_INSTALL` 控制是否在缺少 Chromium 时自动安装，默认 `true`；如服务器禁止运行时下载，可设为 `false` 并提前手动执行 `python -m playwright install chromium`。
+- `NAGEKI_PLAYWRIGHT_BROWSER_TIMEOUT` 控制浏览器截图超时时间，默认 `60` 秒；用于启动浏览器、打开渲染页、等待前端 ready 和截图。
 - `NAGEKI_PLAYWRIGHT_INSTALL_TIMEOUT` 控制自动安装超时时间，默认 `600` 秒。
 - `NAGEKI_PLAYWRIGHT_INSTALL_WITH_DEPS` 默认为关闭；Linux 环境如果需要同时安装系统依赖，可设为 `true`，但这通常需要更高权限。
 - `BOT_API_URL` 和 `BOT_API_KEY` 仅在使用 QQ 绑定、查绑、资料查询等功能时需要填写。

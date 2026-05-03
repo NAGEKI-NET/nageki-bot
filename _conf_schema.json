@@ -39,6 +39,11 @@
     "type": "bool",
     "default": true
   },
+  "NAGEKI_PLAYWRIGHT_BROWSER_TIMEOUT": {
+    "description": "浏览器截图超时时间（秒），用于启动浏览器、打开渲染页、等待前端 ready 和截图",
+    "type": "int",
+    "default": 60
+  },
   "NAGEKI_PLAYWRIGHT_INSTALL_TIMEOUT": {
     "description": "自动安装 Playwright Chromium 的超时时间（秒）",
     "type": "int",

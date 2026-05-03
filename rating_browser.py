@@ -8,10 +8,10 @@ from typing import Any, Dict, List
 
 try:
     from .browser_fonts import inject_browser_fonts
-    from .playwright_runtime import launch_playwright_chromium
+    from .playwright_runtime import get_browser_timeout_ms, launch_playwright_chromium
 except ImportError:
     from browser_fonts import inject_browser_fonts
-    from playwright_runtime import launch_playwright_chromium
+    from playwright_runtime import get_browser_timeout_ms, launch_playwright_chromium
 
 logger = logging.getLogger(__name__)
 
@@ -86,11 +86,14 @@ async def generate_rating_browser_image_bytes(
     browser = None
     try:
         async with async_playwright() as playwright:
+            browser_timeout_ms = get_browser_timeout_ms()
             browser = await launch_playwright_chromium(playwright)
             page = await browser.new_page(
                 viewport={"width": 1600, "height": 2400},
                 device_scale_factor=1,
             )
+            page.set_default_timeout(browser_timeout_ms)
+            page.set_default_navigation_timeout(browser_timeout_ms)
             init_payload = json.dumps(
                 {
                     "profile": profile,
@@ -128,14 +131,14 @@ async def generate_rating_browser_image_bytes(
                 """.replace("__NAGEKI_INIT_PAYLOAD__", init_payload)
             )
             render_url = getattr(api_client, "rating_render_url", None) or _get_frontend_render_url()
-            await page.goto(render_url, wait_until="networkidle")
+            await page.goto(render_url, wait_until="networkidle", timeout=browser_timeout_ms)
             await inject_browser_fonts(page)
-            await page.wait_for_function("window.__NAGEKI_RENDER_READY__ === true")
+            await page.wait_for_function("window.__NAGEKI_RENDER_READY__ === true", timeout=browser_timeout_ms)
             render_root = page.locator(
                 ".ongeki-rating-render, .rating-render, "
                 "[data-nageki-render='ongeki-rating'], [data-render='ongeki-rating']"
             ).first
-            await render_root.wait_for(state="visible")
+            await render_root.wait_for(state="visible", timeout=browser_timeout_ms)
             box = await render_root.bounding_box()
             if not box:
                 raise RuntimeError("前端 Rating 页截图区域不可用。")
@@ -148,6 +151,7 @@ async def generate_rating_browser_image_bytes(
             return await page.screenshot(
                 type="png",
                 omit_background=True,
+                timeout=browser_timeout_ms,
                 clip=clip,
             )
     except Exception as exc:

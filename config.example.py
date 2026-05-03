@@ -37,6 +37,10 @@ NAGEKI_PROFILE_RENDER_LANGUAGE = "zh"
 # python -m playwright install chromium
 NAGEKI_PLAYWRIGHT_AUTO_INSTALL = True
 
+# 浏览器截图超时时间（秒）
+# 用于启动浏览器、打开渲染页、等待前端 ready 和截图
+NAGEKI_PLAYWRIGHT_BROWSER_TIMEOUT = 60
+
 # 自动安装 Chromium 的超时时间（秒）
 NAGEKI_PLAYWRIGHT_INSTALL_TIMEOUT = 600
 

@@ -52,6 +52,7 @@ class NagekiBot(Star):
         profile_render_language = self._get_plugin_config_value("NAGEKI_PROFILE_RENDER_LANGUAGE", "zh")
         for key in (
             "NAGEKI_PLAYWRIGHT_AUTO_INSTALL",
+            "NAGEKI_PLAYWRIGHT_BROWSER_TIMEOUT",
             "NAGEKI_PLAYWRIGHT_INSTALL_TIMEOUT",
             "NAGEKI_PLAYWRIGHT_INSTALL_WITH_DEPS",
         ):
