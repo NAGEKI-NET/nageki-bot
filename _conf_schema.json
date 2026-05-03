@@ -34,6 +34,21 @@
     "type": "string",
     "default": "zh"
   },
+  "NAGEKI_PLAYWRIGHT_AUTO_INSTALL": {
+    "description": "缺少 Playwright Chromium 时是否自动安装",
+    "type": "bool",
+    "default": true
+  },
+  "NAGEKI_PLAYWRIGHT_INSTALL_TIMEOUT": {
+    "description": "自动安装 Playwright Chromium 的超时时间（秒）",
+    "type": "int",
+    "default": 600
+  },
+  "NAGEKI_PLAYWRIGHT_INSTALL_WITH_DEPS": {
+    "description": "Linux 环境是否同时安装 Playwright 系统依赖，通常需要更高权限",
+    "type": "bool",
+    "default": false
+  },
   "BOT_API_URL": {
     "description": "QQ 机器人 API 地址，不使用绑定功能可留空",
     "type": "string",

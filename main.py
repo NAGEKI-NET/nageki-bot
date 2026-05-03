@@ -50,6 +50,14 @@ class NagekiBot(Star):
         rating_render_url = self._get_plugin_config_value("NAGEKI_RATING_RENDER_URL", "http://localhost:4200/render/ongeki-rating")
         profile_render_theme = self._get_plugin_config_value("NAGEKI_PROFILE_RENDER_THEME", "dark")
         profile_render_language = self._get_plugin_config_value("NAGEKI_PROFILE_RENDER_LANGUAGE", "zh")
+        for key in (
+            "NAGEKI_PLAYWRIGHT_AUTO_INSTALL",
+            "NAGEKI_PLAYWRIGHT_INSTALL_TIMEOUT",
+            "NAGEKI_PLAYWRIGHT_INSTALL_WITH_DEPS",
+        ):
+            value = self._get_plugin_config_value(key)
+            if value is not None:
+                os.environ[key] = str(value)
         bot_api_key_source = "插件配置" if self.config and self.config.get("BOT_API_KEY") not in (None, "") else ("环境变量" if os.getenv("BOT_API_KEY") else "默认值")
         
         logger.info(f"[初始化] BOT_API_KEY 来源: {bot_api_key_source}")

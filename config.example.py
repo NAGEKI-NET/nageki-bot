@@ -33,6 +33,16 @@ NAGEKI_PROFILE_RENDER_THEME = "dark"
 # 前端截图语言：zh、en 或 ja
 NAGEKI_PROFILE_RENDER_LANGUAGE = "zh"
 
+# 缺少 Playwright Chromium 时自动执行：
+# python -m playwright install chromium
+NAGEKI_PLAYWRIGHT_AUTO_INSTALL = True
+
+# 自动安装 Chromium 的超时时间（秒）
+NAGEKI_PLAYWRIGHT_INSTALL_TIMEOUT = 600
+
+# Linux 环境如果需要同时安装系统依赖可开启；通常需要更高权限
+NAGEKI_PLAYWRIGHT_INSTALL_WITH_DEPS = False
+
 # ========== QQ机器人API 配置 ==========
 
 # QQ机器人API服务器地址（测试阶段默认：http://localhost:8080）

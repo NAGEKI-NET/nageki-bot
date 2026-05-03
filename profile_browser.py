@@ -6,8 +6,10 @@ from typing import Any, Dict
 
 try:
     from .browser_fonts import inject_browser_fonts
+    from .playwright_runtime import launch_playwright_chromium
 except ImportError:
     from browser_fonts import inject_browser_fonts
+    from playwright_runtime import launch_playwright_chromium
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +44,7 @@ async def generate_profile_browser_image_bytes(
     browser = None
     try:
         async with async_playwright() as playwright:
-            browser = await playwright.chromium.launch()
+            browser = await launch_playwright_chromium(playwright)
             page = await browser.new_page(
                 viewport={"width": 1600, "height": 1280},
                 device_scale_factor=1,

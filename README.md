@@ -24,7 +24,7 @@ uv run pip install pillow aiohttp playwright
 uv run python -m playwright install chromium
 ```
 
-说明：`playwright` 用于打开前端 `/render/ongeki-profile` 和 `/render/ongeki-rating` 并截图；截图前会自动注入 `assets/fonts` 中随插件分发的字体，避免 bot 运行环境缺少系统中文/日文字体导致文字显示异常。如果运行环境没有安装 Playwright、Chromium 或前端渲染页不可访问，会自动回退到 Pillow 绘图版本。浏览器渲染和 Pillow 回退都会以 `base64://` 图片 URL 返回，不会写入截图文件，避免并发查询互相覆盖。
+说明：`playwright` 用于打开前端 `/render/ongeki-profile` 和 `/render/ongeki-rating` 并截图；如果运行环境已安装 Python 依赖但缺少 Playwright Chromium，插件会在首次浏览器截图时自动执行 `python -m playwright install chromium`。截图前会自动注入 `assets/fonts` 中随插件分发的字体，避免 bot 运行环境缺少系统中文/日文字体导致文字显示异常。如果运行环境没有安装 Playwright、Chromium 安装失败或前端渲染页不可访问，会自动回退到 Pillow 绘图版本。浏览器渲染和 Pillow 回退都会以 `base64://` 图片 URL 返回，不会写入截图文件，避免并发查询互相覆盖。
 
 ## 配置
 
@@ -42,6 +42,8 @@ NAGEKI_PROFILE_RENDER_URL = http://localhost:4200/render/ongeki-profile
 NAGEKI_RATING_RENDER_URL = http://localhost:4200/render/ongeki-rating
 NAGEKI_PROFILE_RENDER_THEME = dark
 NAGEKI_PROFILE_RENDER_LANGUAGE = zh
+NAGEKI_PLAYWRIGHT_AUTO_INSTALL = true
+NAGEKI_PLAYWRIGHT_INSTALL_TIMEOUT = 600
 BOT_API_URL = http://localhost:8080
 BOT_API_KEY = 你的 QQ 机器人 API 密钥
 ```
@@ -52,6 +54,9 @@ BOT_API_KEY = 你的 QQ 机器人 API 密钥
 - `NAGEKI_RATING_RENDER_URL` 为 Rating 截图使用的前端渲染页；需要指向 NAGEKI-NET-NEXT 的 `/render/ongeki-rating`。
 - `NAGEKI_PROFILE_RENDER_THEME` 控制前端截图主题，可填 `dark` 或 `light`。
 - `NAGEKI_PROFILE_RENDER_LANGUAGE` 控制前端截图语言，可填 `zh`、`en` 或 `ja`。
+- `NAGEKI_PLAYWRIGHT_AUTO_INSTALL` 控制是否在缺少 Chromium 时自动安装，默认 `true`；如服务器禁止运行时下载，可设为 `false` 并提前手动执行 `python -m playwright install chromium`。
+- `NAGEKI_PLAYWRIGHT_INSTALL_TIMEOUT` 控制自动安装超时时间，默认 `600` 秒。
+- `NAGEKI_PLAYWRIGHT_INSTALL_WITH_DEPS` 默认为关闭；Linux 环境如果需要同时安装系统依赖，可设为 `true`，但这通常需要更高权限。
 - `BOT_API_URL` 和 `BOT_API_KEY` 仅在使用 QQ 绑定、查绑、资料查询等功能时需要填写。
 - 为兼容旧部署方式，插件仍支持从环境变量读取同名配置；如果插件配置里已填写，会优先使用插件配置。
 
@@ -108,7 +113,7 @@ python test_rating_style.py
 
 1. **Token 获取**：需要从 Nageki-Net 网站登录后获取 JWT token
 2. **网络连接**：需要能够访问 Nageki-Net API 和 CDN
-3. **Playwright 浏览器运行时**：Profile 与 Rating 的浏览器截图需要先执行 `python -m playwright install chromium`；插件会在截图时加载 `assets/fonts` 内置字体，通常不需要额外安装系统字体
+3. **Playwright 浏览器运行时**：Profile 与 Rating 的浏览器截图会在缺少 Chromium 时自动执行 `python -m playwright install chromium`；如果自动安装失败，可手动运行该命令。插件会在截图时加载 `assets/fonts` 内置字体，通常不需要额外安装系统字体
 4. **首次运行**：首次运行会下载音乐列表和封面图片，可能需要一些时间
 5. **缓存**：数据会缓存到本地，后续运行会更快
 6. **QQ机器人API**：使用QQ机器人功能需要在 AstrBot 插件配置中填写 `BOT_API_KEY`，并确保 API 密钥安全
