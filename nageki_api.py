@@ -374,6 +374,20 @@ class NagekiApiClient:
                 except json.JSONDecodeError:
                     return {}
 
+    async def get_maimai_rating_bestlist(self, token: str) -> List[Dict[str, Any]]:
+        """获取 Maimai 旧曲/Standard Rating 列表。"""
+        resp = await self._request("GET", "api/game/maimai2/rating/bestlist", token=token, timeout=120)
+        if isinstance(resp, list):
+            return resp
+        return resp.get("data", [])
+
+    async def get_maimai_rating_newlist(self, token: str) -> List[Dict[str, Any]]:
+        """获取 Maimai 新曲/DX Rating 列表。"""
+        resp = await self._request("GET", "api/game/maimai2/rating/newlist", token=token, timeout=120)
+        if isinstance(resp, list):
+            return resp
+        return resp.get("data", [])
+
     def get_maimai_jacket_url(self, music_id: int) -> str:
         """获取 Maimai 音乐封面 URL"""
         # 假设 ID 是数字，需要补零到 4 位 (或者 5 位? Maimai ID 经常是 5 位，如 10001)

@@ -17,9 +17,10 @@ async def generate_profile_canvas_image(
     output_path: str,
     profile: Dict[str, Any],
     api_client=None,
+    game: str = "ongeki",
 ) -> str:
     # output_path is kept for compatibility with the browser renderer signature.
-    image_bytes = await generate_profile_canvas_image_bytes(profile, api_client)
+    image_bytes = await generate_profile_canvas_image_bytes(profile, api_client, game=game)
     encoded = base64.b64encode(image_bytes).decode("ascii")
     return f"base64://{encoded}"
 
@@ -27,9 +28,13 @@ async def generate_profile_canvas_image(
 async def generate_profile_canvas_image_bytes(
     profile: Dict[str, Any],
     api_client=None,
+    game: str = "ongeki",
 ) -> bytes:
     if Image is None:
         raise RuntimeError("Pillow 未安装，无法绘制图片，请安装 pillow 再试。")
+
+    if game == "maimai":
+        return await generate_maimai_profile_canvas_image_bytes(profile)
 
     width = 1600
     height = 1280
@@ -297,6 +302,224 @@ async def generate_profile_canvas_image_bytes(
     wrapped_signature = wrap_text(signature, signature_font, sig_box[2] - sig_box[0] - 44, max_lines=2)
     for idx, line in enumerate(wrapped_signature):
         text((sig_box[0] + 22, sig_box[1] + 24 + idx * 26), line, signature_font, (55, 65, 81))
+
+    buffer = io.BytesIO()
+    bg.convert("RGB").save(buffer, format="JPEG", quality=95)
+    return buffer.getvalue()
+
+
+async def generate_maimai_profile_canvas_image_bytes(profile: Dict[str, Any]) -> bytes:
+    width = 1500
+    height = 1000
+    padding = 48
+
+    bg = Image.new("RGBA", (width, height), (250, 251, 255, 255))
+    draw = ImageDraw.Draw(bg)
+
+    colors = {
+        "bg": (250, 251, 255),
+        "card": (255, 255, 255),
+        "text": (20, 23, 31),
+        "subtle": (99, 109, 128),
+        "line": (228, 232, 242),
+        "yellow": (245, 158, 11),
+        "blue": (37, 99, 235),
+        "green": (22, 163, 74),
+        "pink": (219, 39, 119),
+        "purple": (147, 51, 234),
+    }
+
+    plugin_dir = os.path.dirname(__file__)
+    fonts_dir = os.path.join(plugin_dir, "assets", "fonts")
+
+    def load_font_candidates(paths, size: int):
+        for path in paths:
+            if os.path.exists(path):
+                try:
+                    return ImageFont.truetype(path, size)
+                except Exception:
+                    continue
+        return None
+
+    def load_font_pair(size: int, bold: bool = False):
+        latin_paths = [os.path.join(fonts_dir, "segoeuib.ttf" if bold else "segoeui.ttf")]
+        cjk_paths = [
+            os.path.join(fonts_dir, "BIZ-UDGothicB.ttc" if bold else "BIZ-UDGOTHICR.TTC"),
+            os.path.join(fonts_dir, "msgothic.ttc"),
+        ]
+        latin_font = load_font_candidates(latin_paths, size)
+        cjk_font = load_font_candidates(cjk_paths, size)
+        fallback = ImageFont.load_default()
+        return (latin_font or cjk_font or fallback, cjk_font or latin_font or fallback)
+
+    title_font = load_font_pair(42, bold=True)
+    subtitle_font = load_font_pair(20)
+    name_font = load_font_pair(34, bold=True)
+    section_font = load_font_pair(24, bold=True)
+    value_font = load_font_pair(40, bold=True)
+    body_font = load_font_pair(18)
+    small_font = load_font_pair(15)
+    signature_font = load_font_pair(22)
+
+    def pick_font(font_pair, value: str):
+        text_value = str(value)
+        if re.search(r"[\u3000-\u303f\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]", text_value):
+            return font_pair[1]
+        return font_pair[0]
+
+    def text(xy, value, font_pair, fill, anchor="la"):
+        draw.text(xy, str(value), font=pick_font(font_pair, value), fill=fill, anchor=anchor)
+
+    def round_rect(box, radius=18, fill=None, outline=None, width_=1):
+        draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width_)
+
+    def wrap_text(value: str, font_pair, max_width: int, max_lines: int = 2):
+        target_font = pick_font(font_pair, value)
+        lines = []
+        current = ""
+        for ch in value:
+            candidate = current + ch
+            if draw.textlength(candidate, font=target_font) <= max_width:
+                current = candidate
+                continue
+            if current:
+                lines.append(current)
+            current = ch
+            if len(lines) >= max_lines:
+                break
+        if current and len(lines) < max_lines:
+            lines.append(current)
+        if len(lines) == max_lines and "".join(lines) != value:
+            last = lines[-1]
+            while last and draw.textlength(last + "...", font=target_font) > max_width:
+                last = last[:-1]
+            lines[-1] = last + "..."
+        return lines
+
+    def fmt_int(value: Any) -> str:
+        try:
+            return f"{int(value or 0):,}"
+        except Exception:
+            return "0"
+
+    def format_date(value: Any) -> str:
+        if not value:
+            return "N/A"
+        return str(value).split("T", 1)[0]
+
+    class_name_map = {
+        0: "CLASS_1",
+        1: "CLASS_2",
+        2: "CLASS_3",
+        3: "CLASS_4",
+        4: "CLASS_5",
+        5: "CLASS_M",
+        6: "CLASS_M_PLUS",
+        7: "CLASS_MM",
+        8: "CLASS_MM_PLUS",
+        9: "CLASS_MMM",
+        10: "CLASS_MMM_PLUS",
+    }
+    course_name_map = {
+        0: "DAN_I",
+        1: "DAN_II",
+        2: "DAN_III",
+        3: "DAN_IV",
+        4: "DAN_V",
+        5: "DAN_VI",
+        6: "DAN_VII",
+        7: "DAN_VIII",
+        8: "DAN_IX",
+        9: "DAN_X",
+        10: "DAN_INFINITE",
+        11: "SILVER_I",
+        12: "SILVER_II",
+        13: "SILVER_III",
+        14: "SILVER_IV",
+        15: "GOLD_I",
+        16: "GOLD_II",
+        17: "GOLD_III",
+        18: "GOLD_IV",
+        19: "PLATINUM_I",
+        20: "PLATINUM_II",
+        21: "PLATINUM_III",
+        22: "PLATINUM_IV",
+        23: "RAINBOW",
+    }
+
+    text((padding, 58), "Maimai Profile", title_font, colors["text"])
+    text((padding, 102), "来自 nageki maiprofile 的玩家资料卡", subtitle_font, colors["subtle"])
+
+    main_card = (padding, 140, width - padding, 430)
+    round_rect(main_card, radius=28, fill=colors["card"], outline=colors["line"], width_=2)
+
+    text((padding + 36, 190), profile.get("userName", "Unknown"), name_font, colors["text"])
+    text((padding + 36, 236), f"Last Play: {format_date(profile.get('lastPlayDate'))}", body_font, colors["subtle"])
+    text((padding + 36, 270), f"Version: {profile.get('lastRomVersion') or 'N/A'}", body_font, colors["subtle"])
+
+    rating_box = (padding + 36, 318, padding + 430, 394)
+    round_rect(rating_box, radius=18, fill=(255, 247, 237))
+    text((rating_box[0] + 20, rating_box[1] + 18), "Current Rating", body_font, colors["subtle"])
+    text((rating_box[0] + 20, rating_box[1] + 58), fmt_int(profile.get("playerRating")), value_font, colors["yellow"])
+    text((rating_box[0] + 250, rating_box[1] + 62), f"Highest {fmt_int(profile.get('highestRating'))}", body_font, colors["subtle"])
+
+    stat_y = 470
+    stat_h = 138
+    stat_gap = 18
+    stat_w = (width - padding * 2 - stat_gap * 3) // 4
+    stats = [
+        ("Rating", fmt_int(profile.get("playerRating")), (255, 247, 237), colors["yellow"]),
+        ("Awake", fmt_int(profile.get("totalAwake")), (240, 253, 244), colors["green"]),
+        ("Play Count", fmt_int(profile.get("playCount")), (239, 246, 255), colors["blue"]),
+        ("Highest", fmt_int(profile.get("highestRating")), (245, 243, 255), colors["purple"]),
+    ]
+    for idx, (label, value, fill, accent) in enumerate(stats):
+        x1 = padding + idx * (stat_w + stat_gap)
+        box = (x1, stat_y, x1 + stat_w, stat_y + stat_h)
+        round_rect(box, radius=22, fill=fill)
+        text((x1 + stat_w / 2, stat_y + 54), value, value_font, accent, anchor="ma")
+        text((x1 + stat_w / 2, stat_y + 108), label, body_font, colors["subtle"], anchor="ma")
+
+    detail_card = (padding, 650, width - padding, 840)
+    round_rect(detail_card, radius=28, fill=colors["card"], outline=colors["line"], width_=2)
+    text((padding + 36, 694), "Profile Detail", section_font, colors["text"])
+
+    details = [
+        ("Class", class_name_map.get(profile.get("classRank"), fmt_int(profile.get("classRank")))),
+        ("Course", course_name_map.get(profile.get("courseRank"), fmt_int(profile.get("courseRank")))),
+        ("Last Play", format_date(profile.get("lastPlayDate"))),
+        ("Version", str(profile.get("lastRomVersion") or "N/A")),
+        ("Music Rating", fmt_int(profile.get("musicRating"))),
+        ("Grade Rating", fmt_int(profile.get("gradeRating"))),
+        ("Total DX Score", fmt_int(profile.get("totalDeluxscore"))),
+        ("Play VS Count", fmt_int(profile.get("playVsCount"))),
+        ("Play Sync Count", fmt_int(profile.get("playSyncCount"))),
+        ("Win Count", fmt_int(profile.get("winCount"))),
+        ("Help Count", fmt_int(profile.get("helpCount"))),
+        ("Combo Count", fmt_int(profile.get("comboCount"))),
+    ]
+
+    col_count = 3
+    row_gap = 18
+    col_gap = 24
+    inner_x = padding + 36
+    inner_y = 736
+    cell_w = (width - padding * 2 - 72 - col_gap * 2) // col_count
+    for idx, (label, value) in enumerate(details):
+        row = idx // col_count
+        col = idx % col_count
+        x = inner_x + col * (cell_w + col_gap)
+        y = inner_y + row * row_gap
+        text((x, y), label, small_font, colors["subtle"])
+        text((x + cell_w, y), value, body_font, colors["text"], anchor="ra")
+
+    sign_card = (padding, 872, width - padding, 952)
+    round_rect(sign_card, radius=24, fill=colors["card"], outline=colors["line"], width_=2)
+    text((padding + 36, 910), "个性签名", section_font, colors["text"])
+    signature = (profile.get("profileContent") or "").strip() or "这个玩家还没有设置个性签名。"
+    wrapped_signature = wrap_text(signature, signature_font, width - padding * 2 - 220, max_lines=2)
+    for idx, line in enumerate(wrapped_signature):
+        text((padding + 220, 900 + idx * 26), line, signature_font, colors["subtle"])
 
     buffer = io.BytesIO()
     bg.convert("RGB").save(buffer, format="JPEG", quality=95)

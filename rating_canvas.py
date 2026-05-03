@@ -303,7 +303,7 @@ async def generate_rating_canvas_image(
         header_subtitle = "BEST " + (cat_title.replace("Best ", "") if "Best" in cat_title else "DATA")
         
         stat_label = "平均楽曲Rating"
-        stat_value = RatingCalculator.format_rating(category.get('averageRating', 0))
+        stat_value = f"{category.get('averageAchievement', 0):.4f}%" if game == "maimai" else RatingCalculator.format_rating(category.get('averageRating', 0))
         stat_color = text_white
         
         cat_title_lower = cat_title.lower()
@@ -542,7 +542,7 @@ async def generate_rating_canvas_image(
                     # 普通模式
                     # 下行: Score (绿色)
                     score_val = item.get("value", 0)
-                    score_str = f"{score_val:,}"
+                    score_str = f"{score_val / 10000:.4f}%" if game == "maimai" else f"{score_val:,}"
                     sw = draw.textlength(score_str, font=get_font(score_font, score_str))
                     score_y = bottom_y - 14
                     draw.text((right_x - sw, score_y), score_str, fill=text_green, font=get_font(score_font, score_str))
@@ -552,10 +552,10 @@ async def generate_rating_canvas_image(
                     rating_bonus = item.get("ratingBonus", 0)
                     
                     # 构建 Rating 显示文本
-                    rating_parts = [f"{rating_val:.2f}"]
+                    rating_parts = [f"RA {rating_val}"] if game == "maimai" else [f"{rating_val:.2f}"]
                     
                     # 添加 Bonus 显示
-                    if rating_bonus > 0:
+                    if game != "maimai" and rating_bonus > 0:
                         rating_parts.append(f"+{rating_bonus:.2f}")
                     
                     # AB/FB 标记

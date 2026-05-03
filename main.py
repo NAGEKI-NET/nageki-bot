@@ -625,17 +625,19 @@ class NagekiBot(Star):
             logger.info(f"[Maimai资料命令] 资料获取完成: {profile.get('userName')}")
 
             try:
-                image_url = await generate_profile_browser_image(
+                image_url = await generate_profile_canvas_image(
                     "",
                     profile,
-                    api_client=self.api_client
+                    api_client=self.api_client,
+                    game="maimai"
                 )
             except Exception as browser_error:
                 logger.warning(f"[Maimai资料命令] 浏览器截图失败，回退到 canvas: {browser_error}")
                 image_url = await generate_profile_canvas_image(
                     "",
                     profile,
-                    api_client=self.api_client
+                    api_client=self.api_client,
+                    game="maimai"
                 )
             yield self._image_result(event, image_url)
 

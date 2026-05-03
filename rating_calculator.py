@@ -63,6 +63,7 @@ class RatingCalculator:
             1: "level1",
             2: "level2",
             3: "level3",
+            4: "level4",
             10: "level4"  # Lunatic
         }
         
