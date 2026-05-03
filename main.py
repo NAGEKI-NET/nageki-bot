@@ -99,6 +99,34 @@ class NagekiBot(Star):
             return "该账号未绑卡，暂时无法查询 rating 或 profile"
         return f"获取Token失败：{e.message}"
 
+    async def _get_sender_qq(self, event: AstrMessageEvent):
+        sender = event.message_obj.sender
+        qq_number = None
+        if hasattr(sender, 'id'):
+            qq_number = str(sender.id)
+        elif hasattr(sender, 'user_id'):
+            qq_number = str(sender.user_id)
+        elif hasattr(sender, 'qq'):
+            qq_number = str(sender.qq)
+        if not qq_number and hasattr(event.message_obj, 'raw_message'):
+            raw = event.message_obj.raw_message
+            if hasattr(raw, 'user_id'):
+                qq_number = str(raw.user_id)
+            elif hasattr(raw, 'sender') and hasattr(raw.sender, 'user_id'):
+                qq_number = str(raw.sender.user_id)
+        return qq_number, sender
+
+    async def _apply_user_bio_to_profile(self, token: str, profile: dict):
+        try:
+            user_profile = await self.api_client.get_user_profile_with_token(token)
+            bio = (user_profile.get("bio") or "").strip() if isinstance(user_profile, dict) else ""
+            if bio:
+                profile["profileContent"] = bio
+                logger.info("[资料命令] 已使用 /api/user/profile 的 bio 覆盖 profileContent")
+        except Exception as user_profile_error:
+            logger.warning(f"[资料命令] 获取 /api/user/profile 失败，继续使用原始资料: {user_profile_error}")
+        return profile
+
     async def initialize(self):
         """插件初始化"""
         logger.info("NagekiBot 插件已初始化")
@@ -129,6 +157,9 @@ class NagekiBot(Star):
             async for result in self._handle_profile_command(event, message_str):
                 yield result
         # 处理 Rating 命令：nageki rating
+        elif message_str == "nageki maiprofile":
+            async for result in self._handle_maimai_profile_command(event):
+                yield result
         elif message_str == "nageki rating":
             async for result in self._handle_rating_command(event):
                 yield result
@@ -425,6 +456,7 @@ class NagekiBot(Star):
             logger.info(f"[Rating命令] 开始处理Rating数据...")
             processor = RatingDataProcessor(self.api_client)
             profile, categories = await processor.process_rating_data(token)
+            profile = await self._apply_user_bio_to_profile(token, profile)
             logger.info(f"[Rating命令] 数据处理完成: Profile={profile.get('userName')}, Categories={len(categories)}")
             
             # 3. 生成图片
@@ -522,6 +554,7 @@ class NagekiBot(Star):
             processor = RatingDataProcessor(self.api_client)
             # 使用新的处理 Maimai 数据的函数
             profile, categories = await processor.process_maimai_rating_data(token)
+            profile = await self._apply_user_bio_to_profile(token, profile)
             logger.info(f"[B50命令] 数据处理完成: Profile={profile.get('userName')}, Categories={len(categories)}")
             
             # 3. 生成图片
@@ -560,6 +593,70 @@ class NagekiBot(Star):
         except Exception as e:
             logger.error(f"B50命令处理出错: {e}", exc_info=True)
             yield event.plain_result(f"发生错误: {str(e)}")
+
+    async def _handle_maimai_profile_command(self, event: AstrMessageEvent):
+        """处理 Maimai 资料命令：nageki maiprofile"""
+        try:
+            if not self.api_client.bot_api_key:
+                yield event.plain_result(
+                    "未配置 BOT_API_KEY，无法使用 QQ 机器人功能。\n"
+                    "请在 AstrBot 插件配置中填写 BOT_API_KEY。"
+                )
+                return
+
+            qq_number, sender = await self._get_sender_qq(event)
+            if not qq_number:
+                logger.error(f"无法获取QQ号，sender对象: {sender}")
+                yield event.plain_result("无法获取您的QQ号，请稍后重试")
+                return
+
+            yield event.plain_result("正在获取 Maimai 资料，请稍候...")
+            logger.info(f"[Maimai资料命令] 开始处理 QQ号: {qq_number}")
+
+            token_result = await self.api_client.bot_get_token(qq_number)
+            token = token_result.get("token")
+            if not token:
+                logger.error(f"[Maimai资料命令] 获取Token失败: {token_result}")
+                yield event.plain_result("获取Token失败，请确认该QQ号已绑定。请前往 https://next.nageki-net.com/net/profile 绑定QQ账号")
+                return
+
+            profile = await self.api_client.get_maimai_profile(token)
+            profile = await self._apply_user_bio_to_profile(token, profile)
+            logger.info(f"[Maimai资料命令] 资料获取完成: {profile.get('userName')}")
+
+            try:
+                image_url = await generate_profile_browser_image(
+                    "",
+                    profile,
+                    api_client=self.api_client
+                )
+            except Exception as browser_error:
+                logger.warning(f"[Maimai资料命令] 浏览器截图失败，回退到 canvas: {browser_error}")
+                image_url = await generate_profile_canvas_image(
+                    "",
+                    profile,
+                    api_client=self.api_client
+                )
+            yield self._image_result(event, image_url)
+
+        except NagekiApiException as e:
+            logger.error(f"[Maimai资料命令] Bot API错误: {e.status} - {e.message}")
+            yield event.plain_result(self._format_bot_token_error(e))
+        except aiohttp.ClientResponseError as e:
+            logger.error(f"[Maimai资料命令] HTTP错误: 状态码={e.status}, 消息={e.message}")
+            if e.status == 401:
+                yield event.plain_result("认证失败：请检查 BOT_API_KEY 是否正确，或该QQ号未绑定。")
+            else:
+                yield event.plain_result(f"查询失败：服务器返回错误 {e.status}")
+        except RuntimeError as e:
+            if "Pillow" in str(e):
+                yield event.plain_result("当前环境未安装 pillow，无法绘制图片。")
+            else:
+                logger.error(f"[Maimai资料命令] 生成图片错误: {e}", exc_info=True)
+                yield event.plain_result(f"生成图片时发生错误: {str(e)}")
+        except Exception as e:
+            logger.error(f"[Maimai资料命令] 处理出错: {e}", exc_info=True)
+            yield event.plain_result(f"查询时发生错误: {str(e)}")
 
     async def _handle_health_command(self, event: AstrMessageEvent):
         """处理健康检查命令：nageki health"""
