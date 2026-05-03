@@ -1,6 +1,7 @@
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
+import astrbot.api.message_components as Comp
 import os
 import aiohttp
 
@@ -70,6 +71,15 @@ class NagekiBot(Star):
         )
         
         logger.info(f"[初始化] API客户端已创建，bot_api_key已设置: {bool(self.api_client.bot_api_key)}")
+
+    def _image_result(self, event: AstrMessageEvent, image_ref: str) -> MessageEventResult:
+        if image_ref.startswith("base64://"):
+            base64_data = image_ref.removeprefix("base64://")
+            return event.chain_result([Comp.Image.fromBase64(base64_data)])
+        if image_ref.startswith("data:image/") and ";base64," in image_ref:
+            base64_data = image_ref.split(";base64,", 1)[1]
+            return event.chain_result([Comp.Image.fromBase64(base64_data)])
+        return event.image_result(image_ref)
     
     async def initialize(self):
         """插件初始化"""
@@ -315,7 +325,7 @@ class NagekiBot(Star):
                     result,
                     api_client=self.api_client
                 )
-            yield event.image_result(image_url)
+            yield self._image_result(event, image_url)
             
         except aiohttp.ClientResponseError as e:
             logger.error(f"[查询资料命令] HTTP错误: 状态码={e.status}, 消息={e.message}")
@@ -412,7 +422,7 @@ class NagekiBot(Star):
             
             # 4. 发送图片
             logger.info(f"[Rating命令] 准备发送图片")
-            yield event.image_result(actual_path)
+            yield self._image_result(event, actual_path)
             logger.info(f"[Rating命令] 图片已发送")
             
         except aiohttp.ClientResponseError as e:
@@ -503,7 +513,7 @@ class NagekiBot(Star):
             
             # 4. 发送图片
             logger.info(f"[B50命令] 准备发送图片")
-            yield event.image_result(actual_path)
+            yield self._image_result(event, actual_path)
             logger.info(f"[B50命令] 图片已发送")
             
         except aiohttp.ClientResponseError as e:
