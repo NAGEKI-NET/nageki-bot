@@ -24,7 +24,7 @@ uv run pip install pillow aiohttp playwright
 uv run python -m playwright install chromium
 ```
 
-说明：`playwright` 用于打开前端 `/render/ongeki-profile` 和 `/render/ongeki-rating` 并截图；如果运行环境没有安装 Playwright、Chromium 或前端渲染页不可访问，会自动回退到 Pillow 绘图版本。浏览器渲染和 Pillow 回退都会以 `base64://` 图片 URL 返回，不会写入截图文件，避免并发查询互相覆盖。
+说明：`playwright` 用于打开前端 `/render/ongeki-profile` 和 `/render/ongeki-rating` 并截图；截图前会自动注入 `assets/fonts` 中随插件分发的字体，避免 bot 运行环境缺少系统中文/日文字体导致文字显示异常。如果运行环境没有安装 Playwright、Chromium 或前端渲染页不可访问，会自动回退到 Pillow 绘图版本。浏览器渲染和 Pillow 回退都会以 `base64://` 图片 URL 返回，不会写入截图文件，避免并发查询互相覆盖。
 
 ## 配置
 
@@ -108,7 +108,7 @@ python test_rating_style.py
 
 1. **Token 获取**：需要从 Nageki-Net 网站登录后获取 JWT token
 2. **网络连接**：需要能够访问 Nageki-Net API 和 CDN
-3. **Playwright 浏览器运行时**：Profile 与 Rating 的浏览器截图需要先执行 `python -m playwright install chromium`
+3. **Playwright 浏览器运行时**：Profile 与 Rating 的浏览器截图需要先执行 `python -m playwright install chromium`；插件会在截图时加载 `assets/fonts` 内置字体，通常不需要额外安装系统字体
 4. **首次运行**：首次运行会下载音乐列表和封面图片，可能需要一些时间
 5. **缓存**：数据会缓存到本地，后续运行会更快
 6. **QQ机器人API**：使用QQ机器人功能需要在 AstrBot 插件配置中填写 `BOT_API_KEY`，并确保 API 密钥安全

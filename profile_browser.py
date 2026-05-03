@@ -4,6 +4,11 @@ import os
 import logging
 from typing import Any, Dict
 
+try:
+    from .browser_fonts import inject_browser_fonts
+except ImportError:
+    from browser_fonts import inject_browser_fonts
+
 logger = logging.getLogger(__name__)
 
 
@@ -77,6 +82,7 @@ async def generate_profile_browser_image_bytes(
             )
             render_url = getattr(api_client, "profile_render_url", None) or _get_frontend_render_url()
             await page.goto(render_url, wait_until="networkidle")
+            await inject_browser_fonts(page)
             await page.wait_for_function("window.__NAGEKI_RENDER_READY__ === true")
             render_root = page.locator(".ongeki-profile-render")
             await render_root.wait_for(state="visible")

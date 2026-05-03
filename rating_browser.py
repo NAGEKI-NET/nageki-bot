@@ -6,6 +6,11 @@ import os
 import logging
 from typing import Any, Dict, List
 
+try:
+    from .browser_fonts import inject_browser_fonts
+except ImportError:
+    from browser_fonts import inject_browser_fonts
+
 logger = logging.getLogger(__name__)
 
 
@@ -122,6 +127,7 @@ async def generate_rating_browser_image_bytes(
             )
             render_url = getattr(api_client, "rating_render_url", None) or _get_frontend_render_url()
             await page.goto(render_url, wait_until="networkidle")
+            await inject_browser_fonts(page)
             await page.wait_for_function("window.__NAGEKI_RENDER_READY__ === true")
             render_root = page.locator(
                 ".ongeki-rating-render, .rating-render, "
