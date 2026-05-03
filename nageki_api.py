@@ -578,6 +578,41 @@ class NagekiApiClient:
                     logger.error(f"[Net API] 原始响应: {response_text}")
                     raise
     
+    async def get_user_profile_with_token(self, token: str) -> Dict[str, Any]:
+        """使用用户 JWT 获取 Web 侧用户资料（含 bio/avatar 等字段）。"""
+        base_url = self.api_base_url.rstrip("/")
+        url = urljoin(base_url + "/", "api/user/profile")
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}"
+        }
+
+        logger.info(f"[Net API] 请求: GET {url}")
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as resp:
+                status = resp.status
+                logger.info(f"[Net API] 响应状态码: {status}")
+
+                response_text = await resp.text()
+                logger.info(f"[Net API] 响应内容: {response_text[:500]}")
+
+                if status >= 400:
+                    logger.error(f"[Net API] HTTP错误响应: {status}")
+                    logger.error(f"[Net API] 错误响应体: {response_text}")
+
+                resp.raise_for_status()
+
+                try:
+                    result = json.loads(response_text) if response_text else {}
+                    logger.info(f"[Net API] 用户资料响应JSON: {result}")
+                    return result
+                except json.JSONDecodeError as e:
+                    logger.error(f"[Net API] 解析JSON响应失败: {e}")
+                    logger.error(f"[Net API] 原始响应: {response_text}")
+                    raise
+
     async def get_rating_bestlist(self, token: str) -> List[Dict[str, Any]]:
         """
         使用Token获取最佳成绩列表（调用Net API）

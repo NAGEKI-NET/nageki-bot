@@ -325,6 +325,14 @@ class NagekiBot(Star):
             
             # 步骤2: 使用Token调用Net API获取资料
             result = await self.api_client.get_profile_with_token(token)
+            try:
+                user_profile = await self.api_client.get_user_profile_with_token(token)
+                bio = (user_profile.get("bio") or "").strip() if isinstance(user_profile, dict) else ""
+                if bio:
+                    result["profileContent"] = bio
+                    logger.info("[查询资料命令] 已使用 /api/user/profile 的 bio 覆盖 profileContent")
+            except Exception as user_profile_error:
+                logger.warning(f"[查询资料命令] 获取 /api/user/profile 失败，继续使用游戏资料签名: {user_profile_error}")
             
             # 记录API返回的完整数据，用于调试
             logger.info(f"[查询资料命令] Net API返回数据: {result}")
