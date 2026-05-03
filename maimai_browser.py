@@ -55,6 +55,7 @@ async def _screenshot_page(
     try:
         async with async_playwright() as playwright:
             browser_timeout_ms = get_browser_timeout_ms()
+            logger.info("[Maimai截图] 启动浏览器，目标页面: %s", page_url)
             browser = await launch_playwright_chromium(playwright)
             page = await browser.new_page(
                 viewport={"width": 1600, "height": viewport_height},
@@ -90,15 +91,21 @@ async def _screenshot_page(
                 """.replace("__NAGEKI_INIT_PAYLOAD__", init_payload)
             )
 
+            logger.info("[Maimai截图] 打开页面: %s", page_url)
             await page.goto(page_url, wait_until="domcontentloaded", timeout=browser_timeout_ms)
+            logger.info("[Maimai截图] 页面已打开，开始注入字体")
             await inject_browser_fonts(page)
+            logger.info("[Maimai截图] 等待根节点: %s", root_selector)
             await page.wait_for_selector(root_selector, state="visible", timeout=browser_timeout_ms)
+            logger.info("[Maimai截图] 等待内容节点: %s", ready_selector)
             await page.wait_for_selector(ready_selector, state="visible", timeout=browser_timeout_ms)
-            await page.wait_for_load_state("networkidle", timeout=browser_timeout_ms)
+            logger.info("[Maimai截图] 页面节点已出现，等待短暂稳定")
+            await page.wait_for_timeout(1500)
             root = page.locator(root_selector).first
             box = await root.bounding_box()
             if not box:
                 raise RuntimeError(f"页面截图区域不可用: {root_selector}")
+            logger.info("[Maimai截图] 开始截图，区域: %s", box)
             return await page.screenshot(
                 type="png",
                 timeout=browser_timeout_ms,
@@ -109,6 +116,9 @@ async def _screenshot_page(
                     "height": box["height"],
                 },
             )
+    except Exception as exc:
+        logger.exception("[Maimai截图] 截图失败: %s", exc)
+        raise
     finally:
         if browser:
             await browser.close()

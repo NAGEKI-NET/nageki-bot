@@ -592,6 +592,7 @@ class NagekiBot(Star):
                 )
             except Exception as browser_error:
                 logger.warning(f"[B50命令] 网页截图失败，回退到 canvas: {browser_error}")
+                yield event.plain_result("Maimai 网页截图失败，正在回退到本地渲染，请稍候...")
                 actual_path = await generate_rating_canvas_image(
                     output_path,
                     profile,
@@ -662,6 +663,7 @@ class NagekiBot(Star):
                 )
             except Exception as browser_error:
                 logger.warning(f"[Maimai资料命令] 浏览器截图失败，回退到 canvas: {browser_error}")
+                yield event.plain_result("Maimai 资料页截图失败，正在回退到本地渲染，请稍候...")
                 image_url = await generate_profile_canvas_image(
                     "",
                     profile,
