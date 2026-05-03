@@ -11,6 +11,7 @@ from .rating_canvas import generate_rating_canvas_image
 from .rating_browser import generate_rating_browser_image
 from .profile_canvas import generate_profile_canvas_image
 from .profile_browser import generate_profile_browser_image
+from .maimai_browser import generate_maimai_profile_browser_image, generate_maimai_rating_browser_image
 
 
 @register("nageki-bot", "NagekiBot", "Nageki-Net Rating 查询插件，支持完整的 API 获取、图片获取、数据分析功能", "1.0.0")
@@ -126,6 +127,24 @@ class NagekiBot(Star):
         except Exception as user_profile_error:
             logger.warning(f"[资料命令] 获取 /api/user/profile 失败，继续使用原始资料: {user_profile_error}")
         return profile
+
+    async def _get_user_profile_for_browser(self, token: str, profile: dict):
+        try:
+            user_profile = await self.api_client.get_user_profile_with_token(token)
+            if isinstance(user_profile, dict):
+                if (user_profile.get("bio") or "").strip():
+                    profile["profileContent"] = user_profile.get("bio", "")
+                return user_profile
+        except Exception as user_profile_error:
+            logger.warning(f"[浏览器截图] 获取 /api/user/profile 失败，将使用最小用户信息: {user_profile_error}")
+        return {
+            "id": "bot-render",
+            "username": profile.get("userName", "bot-render"),
+            "name": profile.get("userName", "bot-render"),
+            "email": "",
+            "bio": profile.get("profileContent", ""),
+            "joinDate": "",
+        }
 
     async def initialize(self):
         """插件初始化"""
@@ -557,20 +576,29 @@ class NagekiBot(Star):
             profile = await self._apply_user_bio_to_profile(token, profile)
             logger.info(f"[B50命令] 数据处理完成: Profile={profile.get('userName')}, Categories={len(categories)}")
             
-            # 3. 生成图片
+            current_user = await self._get_user_profile_for_browser(token, profile)
             plugin_dir = os.path.dirname(__file__)
             output_dir = os.path.join(plugin_dir, "assets")
             output_path = os.path.join(output_dir, "nageki_b50.png")
-            
-            logger.info(f"[B50命令] 开始绘制图片: {output_path}")
-            # 使用 game="maimai" 参数
-            actual_path = await generate_rating_canvas_image(
-                output_path,
-                profile,
-                categories,
-                api_client=self.api_client,
-                game="maimai"
-            )
+
+            logger.info(f"[B50命令] 开始生成 Maimai B50 网页截图: {output_path}")
+            try:
+                actual_path = await generate_maimai_rating_browser_image(
+                    output_path,
+                    profile,
+                    api_client=self.api_client,
+                    token=token,
+                    current_user=current_user
+                )
+            except Exception as browser_error:
+                logger.warning(f"[B50命令] 网页截图失败，回退到 canvas: {browser_error}")
+                actual_path = await generate_rating_canvas_image(
+                    output_path,
+                    profile,
+                    categories,
+                    api_client=self.api_client,
+                    game="maimai"
+                )
             logger.info(f"[B50命令] 图片绘制完成: {actual_path}")
             
             # 4. 发送图片
@@ -621,15 +649,16 @@ class NagekiBot(Star):
                 return
 
             profile = await self.api_client.get_maimai_profile(token)
-            profile = await self._apply_user_bio_to_profile(token, profile)
+            current_user = await self._get_user_profile_for_browser(token, profile)
             logger.info(f"[Maimai资料命令] 资料获取完成: {profile.get('userName')}")
 
             try:
-                image_url = await generate_profile_canvas_image(
+                image_url = await generate_maimai_profile_browser_image(
                     "",
                     profile,
                     api_client=self.api_client,
-                    game="maimai"
+                    token=token,
+                    current_user=current_user
                 )
             except Exception as browser_error:
                 logger.warning(f"[Maimai资料命令] 浏览器截图失败，回退到 canvas: {browser_error}")
