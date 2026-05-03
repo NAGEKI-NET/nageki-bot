@@ -10,7 +10,7 @@
     "default": "https://cdn-nageki-next.sys-all.com.cn"
   },
   "NAGEKI_TOKEN": {
-    "description": "Nageki-Net 登录后的 JWT Token，Rating 查询必填",
+    "description": "可选的 Nageki-Net JWT Token，主要用于兼容旧配置或固定账号直连 API",
     "type": "string",
     "default": ""
   },

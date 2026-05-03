@@ -90,6 +90,15 @@ class NagekiBot(Star):
             return event.chain_result([Comp.Image.fromBase64(base64_data)])
         return event.image_result(image_ref)
     
+    def _format_bot_token_error(self, e: NagekiApiException) -> str:
+        if e.status == 401:
+            return "认证失败：请检查 BOT_API_KEY 是否正确"
+        if e.status == 404:
+            return "未找到该QQ号的绑定信息，请前往 https://next.nageki-net.com/net/profile 绑定QQ账号"
+        if e.status == 409 or "未绑卡" in e.message:
+            return "该账号未绑卡，暂时无法查询 rating 或 profile"
+        return f"获取Token失败：{e.message}"
+
     async def initialize(self):
         """插件初始化"""
         logger.info("NagekiBot 插件已初始化")
@@ -344,6 +353,9 @@ class NagekiBot(Star):
                 yield event.plain_result(f"未找到该QQ号的绑定信息，请前往 https://next.nageki-net.com/net/profile 绑定QQ账号")
             else:
                 yield event.plain_result(f"查询失败：服务器返回错误 {e.status}")
+        except NagekiApiException as e:
+            logger.error(f"[鏌ヨ璧勬枡鍛戒护] Bot API閿欒: {e.status} - {e.message}")
+            yield event.plain_result(self._format_bot_token_error(e))
         except RuntimeError as e:
             if "Pillow" in str(e):
                 yield event.plain_result("当前环境未安装 pillow，无法绘制图片。")

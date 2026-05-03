@@ -23,10 +23,10 @@ class RatingDataProcessor:
             for music in self.music_list:
                 self.music_cache[music.get("id")] = music
     
-    async def load_music_list(self):
+    async def load_music_list(self, token: Optional[str] = None):
         """加载音乐列表"""
         if not self.music_list:
-            self.music_list = await self.api_client.get_music_list()
+            self.music_list = await self.api_client.get_music_list(token=token)
             self.api_client.save_music_cache(self.music_list)
             # 重新构建缓存
             self.music_cache = {}
@@ -41,10 +41,10 @@ class RatingDataProcessor:
                 for music in self.music_list:
                     self.music_cache[music.get("id")] = music
     
-    async def load_maimai_music_list(self):
+    async def load_maimai_music_list(self, token: Optional[str] = None):
         """加载 Maimai 音乐列表"""
         if not self.music_list:
-            self.music_list = await self.api_client.get_maimai_music_list()
+            self.music_list = await self.api_client.get_maimai_music_list(token=token)
             # 这里不覆盖 Ongeki 的缓存文件，或者是使用不同的文件名？
             # 简单起见，不保存到文件或使用不同逻辑
             self.music_cache = {}
@@ -101,7 +101,7 @@ class RatingDataProcessor:
 
     async def process_maimai_rating_data(self, token: str):
         """处理 Maimai B50 数据"""
-        await self.load_maimai_music_list()
+        await self.load_maimai_music_list(token)
         
         # 获取 Profile
         profile = await self.api_client.get_maimai_profile(token)
@@ -267,7 +267,7 @@ class RatingDataProcessor:
             (profile, categories) 元组
         """
         # 加载音乐列表
-        await self.load_music_list()
+        await self.load_music_list(token)
         
         # 使用Token获取玩家资料
         profile = await self.api_client.get_profile_with_token(token)

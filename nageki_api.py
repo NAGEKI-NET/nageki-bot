@@ -86,6 +86,13 @@ class NagekiApiClient:
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers
+
+    def _get_headers_with_token(self, token: Optional[str] = None) -> Dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        auth_token = token or self.token
+        if auth_token:
+            headers["Authorization"] = f"Bearer {auth_token}"
+        return headers
     
     def _get_bot_headers(self) -> Dict[str, str]:
         """获取QQ机器人API请求头（包含API密钥）"""
@@ -105,6 +112,7 @@ class NagekiApiClient:
         path: str,
         params: Optional[Dict[str, Any]] = None,
         data: Optional[Dict[str, Any]] = None,
+        token: Optional[str] = None,
         max_retries: int = 3,
         timeout: int = 60
     ) -> Any:
@@ -118,7 +126,7 @@ class NagekiApiClient:
         for attempt in range(max_retries):
             try:
                 async with aiohttp.ClientSession(timeout=timeout_obj) as session:
-                    kwargs = {"headers": self._get_headers()}
+                    kwargs = {"headers": self._get_headers_with_token(token)}
                     if params:
                         url_with_params = url + "?" + urlencode(params)
                     else:
@@ -314,11 +322,11 @@ class NagekiApiClient:
                 resp.raise_for_status()
                 return await resp.json()
 
-    async def get_music_list(self) -> List[Dict[str, Any]]:
+    async def get_music_list(self, token: Optional[str] = None) -> List[Dict[str, Any]]:
         """获取音乐列表（使用更长的超时时间，因为列表可能很大）"""
         params = {"key": "NANETUSEAPIGETKEY4829321346517"}
         logger.info("[Net API] 开始获取音乐列表（可能需要较长时间）...")
-        resp = await self._request("GET", "api/game/ongeki/data/musicList", params=params, timeout=120)
+        resp = await self._request("GET", "api/game/ongeki/data/musicList", params=params, token=token, timeout=120)
         # 兼容 { data: [] } 或 []
         if isinstance(resp, list):
             logger.info(f"[Net API] 音乐列表获取成功，共 {len(resp)} 首")
@@ -327,11 +335,11 @@ class NagekiApiClient:
         logger.info(f"[Net API] 音乐列表获取成功，共 {len(result)} 首")
         return result
 
-    async def get_maimai_music_list(self) -> List[Dict[str, Any]]:
+    async def get_maimai_music_list(self, token: Optional[str] = None) -> List[Dict[str, Any]]:
         """获取 Maimai 音乐列表"""
         logger.info("[Net API] 开始获取 Maimai 音乐列表...")
         # Maimai 音乐列表 API 路径推测为 api/game/maimai2/data/musicList
-        resp = await self._request("GET", "api/game/maimai2/data/musicList", timeout=120)
+        resp = await self._request("GET", "api/game/maimai2/data/musicList", token=token, timeout=120)
         if isinstance(resp, list):
             logger.info(f"[Net API] Maimai 音乐列表获取成功，共 {len(resp)} 首")
             return resp

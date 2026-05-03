@@ -15,8 +15,8 @@ NAGEKI_API_URL = "https://nageki-net.com/"
 # CDN 服务器地址
 NAGEKI_CDN_URL = "https://cdn-nageki-next.sys-all.com.cn"
 
-# JWT Token（必需）
-# 从 Nageki-Net 网站登录后，在浏览器开发者工具中查看网络请求的 Authorization header
+# JWT Token（可选，兼容旧配置）
+# QQ 查询模式下会按当前 QQ 绑定账号动态获取；这里只用于固定账号直连 API 的兜底
 NAGEKI_TOKEN = "your_jwt_token_here"
 
 # 前端资料截图渲染页地址
