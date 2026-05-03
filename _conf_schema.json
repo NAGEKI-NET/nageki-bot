@@ -14,6 +14,26 @@
     "type": "string",
     "default": ""
   },
+  "NAGEKI_PROFILE_RENDER_URL": {
+    "description": "前端资料截图渲染页地址，默认使用本机 Angular 开发服务",
+    "type": "string",
+    "default": "http://localhost:4200/render/ongeki-profile"
+  },
+  "NAGEKI_RATING_RENDER_URL": {
+    "description": "前端 Rating 截图渲染页地址，默认使用本机 Angular 开发服务",
+    "type": "string",
+    "default": "http://localhost:4200/render/ongeki-rating"
+  },
+  "NAGEKI_PROFILE_RENDER_THEME": {
+    "description": "前端截图主题，可选 light 或 dark",
+    "type": "string",
+    "default": "dark"
+  },
+  "NAGEKI_PROFILE_RENDER_LANGUAGE": {
+    "description": "前端截图语言，可选 zh、en 或 ja",
+    "type": "string",
+    "default": "zh"
+  },
   "BOT_API_URL": {
     "description": "QQ 机器人 API 地址，不使用绑定功能可留空",
     "type": "string",

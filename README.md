@@ -7,20 +7,24 @@ Nageki-Net Rating 查询插件，支持完整的 API 获取、图片获取、数
 - ✅ **API 数据获取**：从 Nageki-Net API 获取玩家资料、B50、NEW10、PSCORE50 数据
 - ✅ **图片获取**：自动下载音乐封面图片并缓存到本地
 - ✅ **数据分析**：完整的 Rating 计算逻辑（谱面定数、分数加成、PScore Bonus）
-- ✅ **Canvas 绘制**：使用 Pillow 绘制精美的 Rating 图片，布局与前端保持一致
+- ✅ **前端截图渲染**：Profile 与 Rating 优先使用前端渲染页截图，失败时自动回退到 Pillow 绘图
 - ✅ **QQ机器人集成**：支持QQ号绑定、查询绑定状态、查询用户资料等功能
 
 ## 安装依赖
 
 ```bash
-pip install pillow aiohttp
+pip install pillow aiohttp playwright
+python -m playwright install chromium
 ```
 
 或在 AstrBot 环境中：
 
 ```bash
-uv run pip install pillow aiohttp
+uv run pip install pillow aiohttp playwright
+uv run python -m playwright install chromium
 ```
+
+说明：`playwright` 用于打开前端 `/render/ongeki-profile` 和 `/render/ongeki-rating` 并截图；如果运行环境没有安装 Playwright、Chromium 或前端渲染页不可访问，会自动回退到 Pillow 绘图版本。浏览器渲染和 Pillow 回退都会以 `base64://` 图片 URL 返回，不会写入截图文件，避免并发查询互相覆盖。
 
 ## 配置
 
@@ -34,12 +38,20 @@ uv run pip install pillow aiohttp
 NAGEKI_API_URL = https://nageki-net.com/
 NAGEKI_CDN_URL = https://cdn-nageki-next.sys-all.com.cn
 NAGEKI_TOKEN = 从 Nageki-Net 网站登录后获取的 JWT Token
+NAGEKI_PROFILE_RENDER_URL = http://localhost:4200/render/ongeki-profile
+NAGEKI_RATING_RENDER_URL = http://localhost:4200/render/ongeki-rating
+NAGEKI_PROFILE_RENDER_THEME = dark
+NAGEKI_PROFILE_RENDER_LANGUAGE = zh
 BOT_API_URL = http://localhost:8080
 BOT_API_KEY = 你的 QQ 机器人 API 密钥
 ```
 
 说明：
 - `NAGEKI_TOKEN` 为 Rating 查询必填。
+- `NAGEKI_PROFILE_RENDER_URL` 为资料截图使用的前端渲染页；需要指向 NAGEKI-NET-NEXT 的 `/render/ongeki-profile`。
+- `NAGEKI_RATING_RENDER_URL` 为 Rating 截图使用的前端渲染页；需要指向 NAGEKI-NET-NEXT 的 `/render/ongeki-rating`。
+- `NAGEKI_PROFILE_RENDER_THEME` 控制前端截图主题，可填 `dark` 或 `light`。
+- `NAGEKI_PROFILE_RENDER_LANGUAGE` 控制前端截图语言，可填 `zh`、`en` 或 `ja`。
 - `BOT_API_URL` 和 `BOT_API_KEY` 仅在使用 QQ 绑定、查绑、资料查询等功能时需要填写。
 - 为兼容旧部署方式，插件仍支持从环境变量读取同名配置；如果插件配置里已填写，会优先使用插件配置。
 
@@ -47,7 +59,7 @@ BOT_API_KEY = 你的 QQ 机器人 API 密钥
 
 ### 基础功能（Rating查询）
 
-1. 确保已安装依赖（pillow、aiohttp）
+1. 确保已安装依赖（pillow、aiohttp、playwright，并安装 Playwright Chromium）
 2. 在 AstrBot 插件配置中填写参数（特别是 `NAGEKI_TOKEN`）
 3. 重启 AstrBot 以加载插件
 4. 在聊天中发送消息：`nageki`
@@ -58,12 +70,12 @@ BOT_API_KEY = 你的 QQ 机器人 API 密钥
 配置 `BOT_API_KEY` 和 `BOT_API_URL` 后，可以使用以下命令：
 
 - **健康检查**：`nageki health` - 检查QQ机器人API服务状态
-- **绑定QQ号**：`nageki bind <QQ号> <绑定码>` - 将QQ号与游戏账号绑定
-  - 示例：`nageki bind 123456789 123456`
+- **绑定QQ号**：`nageki bind <绑定码>` - 将当前QQ号与游戏账号绑定
+  - 示例：`nageki bind 123456`
 - **查询绑定状态**：`nageki check <QQ号>` - 查询指定QQ号的绑定状态
   - 示例：`nageki check 123456789`
-- **查询用户资料**：`nageki profile <QQ号>` - 查询指定QQ号绑定的用户游戏资料
-  - 示例：`nageki profile 123456789`
+- **查询用户资料**：`nageki profile` - 查询当前QQ号绑定的用户游戏资料
+  - 示例：`nageki profile`
 
 ## 文件结构
 
@@ -96,10 +108,11 @@ python test_rating_style.py
 
 1. **Token 获取**：需要从 Nageki-Net 网站登录后获取 JWT token
 2. **网络连接**：需要能够访问 Nageki-Net API 和 CDN
-3. **首次运行**：首次运行会下载音乐列表和封面图片，可能需要一些时间
-4. **缓存**：数据会缓存到本地，后续运行会更快
-5. **QQ机器人API**：使用QQ机器人功能需要在 AstrBot 插件配置中填写 `BOT_API_KEY`，并确保 API 密钥安全
-6. **API地址**：默认QQ机器人API地址为 `http://localhost:8080`，可根据实际情况修改
+3. **Playwright 浏览器运行时**：Profile 与 Rating 的浏览器截图需要先执行 `python -m playwright install chromium`
+4. **首次运行**：首次运行会下载音乐列表和封面图片，可能需要一些时间
+5. **缓存**：数据会缓存到本地，后续运行会更快
+6. **QQ机器人API**：使用QQ机器人功能需要在 AstrBot 插件配置中填写 `BOT_API_KEY`，并确保 API 密钥安全
+7. **API地址**：默认QQ机器人API地址为 `http://localhost:8080`，可根据实际情况修改
 
 ## 开发说明
 

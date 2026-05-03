@@ -27,7 +27,11 @@ class NagekiApiClient:
         token: Optional[str] = None,
         cache_dir: Optional[str] = None,
         bot_api_key: Optional[str] = None,
-        bot_api_url: Optional[str] = None
+        bot_api_url: Optional[str] = None,
+        profile_render_url: Optional[str] = None,
+        rating_render_url: Optional[str] = None,
+        profile_render_theme: Optional[str] = None,
+        profile_render_language: Optional[str] = None
     ):
         """
         初始化 API 客户端
@@ -39,6 +43,10 @@ class NagekiApiClient:
             cache_dir: 缓存目录（用于存储图片和音乐数据）
             bot_api_key: QQ机器人API密钥（用于QQ机器人API认证）
             bot_api_url: QQ机器人API服务器地址
+            profile_render_url: 前端资料截图渲染页地址
+            rating_render_url: 前端 Rating 截图渲染页地址
+            profile_render_theme: 前端截图主题（light 或 dark）
+            profile_render_language: 前端截图语言（zh、en 或 ja）
         """
         # 默认 API 地址（需要解码，这里先使用占位符，实际使用时需要配置）
         self.api_base_url = api_base_url or os.getenv("NAGEKI_API_URL", "https://nageki-net.com/")
@@ -51,6 +59,14 @@ class NagekiApiClient:
         self.bot_api_key = bot_api_key or os.getenv("BOT_API_KEY", "")
         # 默认使用localhost:8080，方便测试
         self.bot_api_url = bot_api_url or os.getenv("BOT_API_URL", "http://localhost:8080")
+        self.profile_render_url = profile_render_url or os.getenv("NAGEKI_PROFILE_RENDER_URL", "http://localhost:4200/render/ongeki-profile")
+        self.rating_render_url = rating_render_url or os.getenv("NAGEKI_RATING_RENDER_URL", "http://localhost:4200/render/ongeki-rating")
+        self.profile_render_theme = (profile_render_theme or os.getenv("NAGEKI_PROFILE_RENDER_THEME", "dark")).strip().lower()
+        if self.profile_render_theme not in ("light", "dark"):
+            self.profile_render_theme = "dark"
+        self.profile_render_language = (profile_render_language or os.getenv("NAGEKI_PROFILE_RENDER_LANGUAGE", "zh")).strip().lower()
+        if self.profile_render_language not in ("zh", "en", "ja"):
+            self.profile_render_language = "zh"
         
         # 确保 API URL 以 / 结尾
         if not self.api_base_url.endswith("/"):

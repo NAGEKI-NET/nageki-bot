@@ -1,3 +1,4 @@
+import base64
 import io
 import logging
 import os
@@ -17,6 +18,16 @@ async def generate_profile_canvas_image(
     profile: Dict[str, Any],
     api_client=None,
 ) -> str:
+    # output_path is kept for compatibility with the browser renderer signature.
+    image_bytes = await generate_profile_canvas_image_bytes(profile, api_client)
+    encoded = base64.b64encode(image_bytes).decode("ascii")
+    return f"base64://{encoded}"
+
+
+async def generate_profile_canvas_image_bytes(
+    profile: Dict[str, Any],
+    api_client=None,
+) -> bytes:
     if Image is None:
         raise RuntimeError("Pillow 未安装，无法绘制图片，请安装 pillow 再试。")
 
@@ -287,6 +298,6 @@ async def generate_profile_canvas_image(
     for idx, line in enumerate(wrapped_signature):
         text((sig_box[0] + 22, sig_box[1] + 24 + idx * 26), line, signature_font, (55, 65, 81))
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    bg.convert("RGB").save(output_path, quality=95)
-    return output_path
+    buffer = io.BytesIO()
+    bg.convert("RGB").save(buffer, format="JPEG", quality=95)
+    return buffer.getvalue()

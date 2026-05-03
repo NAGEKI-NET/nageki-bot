@@ -7,6 +7,7 @@ import aiohttp
 from .nageki_api import NagekiApiClient, NagekiApiException
 from .rating_data import RatingDataProcessor
 from .rating_canvas import generate_rating_canvas_image
+from .rating_browser import generate_rating_browser_image
 from .profile_canvas import generate_profile_canvas_image
 from .profile_browser import generate_profile_browser_image
 
@@ -44,6 +45,10 @@ class NagekiBot(Star):
         bot_api_key = self._get_plugin_config_value("BOT_API_KEY", "")
         # 默认使用localhost:8080，方便测试
         bot_api_url = self._get_plugin_config_value("BOT_API_URL", "http://localhost:8080")
+        profile_render_url = self._get_plugin_config_value("NAGEKI_PROFILE_RENDER_URL", "http://localhost:4200/render/ongeki-profile")
+        rating_render_url = self._get_plugin_config_value("NAGEKI_RATING_RENDER_URL", "http://localhost:4200/render/ongeki-rating")
+        profile_render_theme = self._get_plugin_config_value("NAGEKI_PROFILE_RENDER_THEME", "dark")
+        profile_render_language = self._get_plugin_config_value("NAGEKI_PROFILE_RENDER_LANGUAGE", "zh")
         bot_api_key_source = "插件配置" if self.config and self.config.get("BOT_API_KEY") not in (None, "") else ("环境变量" if os.getenv("BOT_API_KEY") else "默认值")
         
         logger.info(f"[初始化] BOT_API_KEY 来源: {bot_api_key_source}")
@@ -57,7 +62,11 @@ class NagekiBot(Star):
             token=token,
             cache_dir=cache_dir,
             bot_api_key=bot_api_key,
-            bot_api_url=bot_api_url
+            bot_api_url=bot_api_url,
+            profile_render_url=profile_render_url,
+            rating_render_url=rating_render_url,
+            profile_render_theme=profile_render_theme,
+            profile_render_language=profile_render_language
         )
         
         logger.info(f"[初始化] API客户端已创建，bot_api_key已设置: {bool(self.api_client.bot_api_key)}")
@@ -293,24 +302,20 @@ class NagekiBot(Star):
             logger.info(f"[查询资料命令] Net API返回数据: {result}")
             logger.info(f"[查询资料命令] Net API返回数据的所有键: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
             
-            plugin_dir = os.path.dirname(__file__)
-            output_dir = os.path.join(plugin_dir, "assets")
-            output_path = os.path.join(output_dir, "nageki_profile.png")
-
             try:
-                actual_path = await generate_profile_browser_image(
-                    output_path,
+                image_url = await generate_profile_browser_image(
+                    "",
                     result,
                     api_client=self.api_client
                 )
             except Exception as browser_error:
                 logger.warning(f"[查询资料命令] 浏览器截图失败，回退到 canvas: {browser_error}")
-                actual_path = await generate_profile_canvas_image(
-                    output_path,
+                image_url = await generate_profile_canvas_image(
+                    "",
                     result,
                     api_client=self.api_client
                 )
-            yield event.image_result(actual_path)
+            yield event.image_result(image_url)
             
         except aiohttp.ClientResponseError as e:
             logger.error(f"[查询资料命令] HTTP错误: 状态码={e.status}, 消息={e.message}")
@@ -384,17 +389,25 @@ class NagekiBot(Star):
             logger.info(f"[Rating命令] 数据处理完成: Profile={profile.get('userName')}, Categories={len(categories)}")
             
             # 3. 生成图片
-            plugin_dir = os.path.dirname(__file__)
-            output_dir = os.path.join(plugin_dir, "assets")
-            output_path = os.path.join(output_dir, "nageki_rating.png")
+            output_path = ""
             
-            logger.info(f"[Rating命令] 开始绘制图片: {output_path}")
-            actual_path = await generate_rating_canvas_image(
-                output_path,
-                profile,
-                categories,
-                api_client=self.api_client
-            )
+            try:
+                logger.info(f"[Rating命令] 开始浏览器截图渲染")
+                actual_path = await generate_rating_browser_image(
+                    output_path,
+                    profile,
+                    categories,
+                    api_client=self.api_client
+                )
+            except Exception as browser_error:
+                logger.warning(f"[Rating命令] 浏览器截图失败，回退到 canvas: {browser_error}")
+                logger.info(f"[Rating命令] 开始绘制 Pillow 回退图片")
+                actual_path = await generate_rating_canvas_image(
+                    output_path,
+                    profile,
+                    categories,
+                    api_client=self.api_client
+                )
             logger.info(f"[Rating命令] 图片绘制完成: {actual_path}")
             
             # 4. 发送图片

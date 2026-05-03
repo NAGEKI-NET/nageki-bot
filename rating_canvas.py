@@ -1,4 +1,5 @@
 """Rating 图片绘制逻辑，支持真实数据和图片。"""
+import base64
 import os
 import io
 import asyncio
@@ -25,7 +26,8 @@ async def generate_rating_canvas_image(
     game: str = "ongeki"
 ) -> str:
     """
-    使用 Pillow 绘制与前端 Rating 页布局相近的图片，并保存到 output_path。
+    使用 Pillow 绘制与前端 Rating 页布局相近的图片。
+    output_path 为空时返回 base64:// 图片，避免并发查询写入同一个文件。
     """
     if Image is None:
         raise RuntimeError("Pillow 未安装，无法绘制图片，请安装 pillow 再试。")
@@ -575,6 +577,12 @@ async def generate_rating_canvas_image(
         # 更新 y 坐标 (增加板块间距)
         y += container_height + 40
         
+    if not output_path:
+        buffer = io.BytesIO()
+        img.convert("RGB").save(buffer, "PNG")
+        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+        return f"base64://{encoded}"
+
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     img.convert("RGB").save(output_path) # 转回 RGB 保存
     

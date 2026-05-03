@@ -19,6 +19,20 @@ NAGEKI_CDN_URL = "https://cdn-nageki-next.sys-all.com.cn"
 # 从 Nageki-Net 网站登录后，在浏览器开发者工具中查看网络请求的 Authorization header
 NAGEKI_TOKEN = "your_jwt_token_here"
 
+# 前端资料截图渲染页地址
+# 默认使用本机 Angular 开发服务；生产环境可改为已部署前端的 /render/ongeki-profile
+NAGEKI_PROFILE_RENDER_URL = "http://localhost:4200/render/ongeki-profile"
+
+# 前端 Rating 截图渲染页地址
+# 默认使用本机 Angular 开发服务；生产环境可改为已部署前端的 /render/ongeki-rating
+NAGEKI_RATING_RENDER_URL = "http://localhost:4200/render/ongeki-rating"
+
+# 前端截图主题：dark 或 light
+NAGEKI_PROFILE_RENDER_THEME = "dark"
+
+# 前端截图语言：zh、en 或 ja
+NAGEKI_PROFILE_RENDER_LANGUAGE = "zh"
+
 # ========== QQ机器人API 配置 ==========
 
 # QQ机器人API服务器地址（测试阶段默认：http://localhost:8080）
