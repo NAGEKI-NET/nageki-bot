@@ -195,6 +195,37 @@ async def tighten_render_layout(page) -> None:
         logger.debug("[浏览器截图] 收紧渲染容器尺寸失败，忽略: %s", exc)
 
 
+async def wait_for_render_images(page, selector: str, per_image_timeout_ms: int = 8000) -> None:
+    """等 selector 范围内所有 <img> 加载完成，避免在 jacket 图还没下完时就截图。
+
+    每张图独立超时（默认 8s），缺失/404 的图不会无限阻塞。
+    """
+    try:
+        await page.evaluate(
+            """
+            async ({selector, perTimeout}) => {
+              const root = document.querySelector(selector);
+              if (!root) return;
+              const imgs = Array.from(root.querySelectorAll('img'));
+              const wait = (img) => {
+                if (img.complete && img.naturalWidth > 0) return null;
+                return Promise.race([
+                  new Promise(resolve => {
+                    img.addEventListener('load', resolve, { once: true });
+                    img.addEventListener('error', resolve, { once: true });
+                  }),
+                  new Promise(resolve => setTimeout(resolve, perTimeout)),
+                ]);
+              };
+              await Promise.all(imgs.map(wait));
+            }
+            """,
+            {"selector": selector, "perTimeout": per_image_timeout_ms},
+        )
+    except Exception as exc:
+        logger.debug("[浏览器截图] 等待图片加载失败，忽略: %s", exc)
+
+
 async def auto_fit_viewport(page, selector: str, padding: int = 8):
     """根据真实内容尺寸把 viewport 拉大（不缩小），避免内容超出 viewport 被截掉。
 

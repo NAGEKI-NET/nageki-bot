@@ -11,6 +11,7 @@ try:
         register_browser_fonts,
         tighten_render_layout,
         wait_for_browser_fonts,
+        wait_for_render_images,
     )
     from .browser_pool import shared_browser_page
     from .image_optimizer import compress_screenshot_bytes_async
@@ -22,6 +23,7 @@ except ImportError:
         register_browser_fonts,
         tighten_render_layout,
         wait_for_browser_fonts,
+        wait_for_render_images,
     )
     from browser_pool import shared_browser_page
     from image_optimizer import compress_screenshot_bytes_async
@@ -104,6 +106,7 @@ async def generate_profile_browser_image_bytes(
             await page.wait_for_function("window.__NAGEKI_RENDER_READY__ === true", timeout=browser_timeout_ms)
             render_root = page.locator(".ongeki-profile-render")
             await render_root.wait_for(state="visible", timeout=browser_timeout_ms)
+            await wait_for_render_images(page, ".ongeki-profile-render")
             await tighten_render_layout(page)
             box = await auto_fit_viewport(page, ".ongeki-profile-render")
             if not box:

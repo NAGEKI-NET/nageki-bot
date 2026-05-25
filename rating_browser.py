@@ -14,6 +14,7 @@ try:
         register_browser_fonts,
         tighten_render_layout,
         wait_for_browser_fonts,
+        wait_for_render_images,
     )
     from .browser_pool import shared_browser_page
     from .image_optimizer import compress_screenshot_bytes_async
@@ -25,6 +26,7 @@ except ImportError:
         register_browser_fonts,
         tighten_render_layout,
         wait_for_browser_fonts,
+        wait_for_render_images,
     )
     from browser_pool import shared_browser_page
     from image_optimizer import compress_screenshot_bytes_async
@@ -166,6 +168,8 @@ async def generate_rating_browser_image_bytes(
             render_root = page.locator(render_selector).first
             await render_root.wait_for(state="visible", timeout=browser_timeout_ms)
             t0 = _mark("render_root.visible", t0)
+            await wait_for_render_images(page, render_selector)
+            t0 = _mark("images.loaded", t0)
             await tighten_render_layout(page)
             box = await auto_fit_viewport(page, render_selector)
             if not box:
