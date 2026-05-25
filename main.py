@@ -10,6 +10,7 @@ from .rating_data import RatingDataProcessor
 from .rating_browser import generate_rating_browser_image
 from .profile_browser import generate_profile_browser_image
 from .maimai_browser import generate_maimai_profile_browser_image, generate_maimai_rating_browser_image
+from . import browser_pool
 
 
 @register("nageki-bot", "NagekiBot", "Nageki-Net Rating 查询插件，支持完整的 API 获取、图片获取、数据分析功能", "1.0.0")
@@ -675,4 +676,8 @@ class NagekiBot(Star):
     
     async def terminate(self):
         """插件销毁"""
+        try:
+            await browser_pool.shutdown()
+        except Exception as e:
+            logger.warning(f"关闭共享浏览器失败: {e}")
         logger.info("NagekiBot 插件已卸载")

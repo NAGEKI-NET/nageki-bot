@@ -137,3 +137,95 @@ async def inject_browser_fonts(page) -> None:
 
     await page.add_style_tag(content=css)
     await wait_for_browser_fonts(page)
+
+
+_LAYOUT_RESET_CSS = """
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  min-height: 0 !important;
+  height: auto !important;
+}
+.ongeki-profile-render,
+.ongeki-rating-render,
+.rating-render,
+.maimai2-profile-render,
+.maimai2-rating-render,
+[data-nageki-render],
+[data-render] {
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+"""
+
+
+async def tighten_render_layout(page) -> None:
+    """收紧渲染容器尺寸，使 bounding_box 等于实际内容，而非 viewport。
+
+    需要在 wait_for_function(__NAGEKI_RENDER_READY__) 之后、bounding_box 之前调用。
+    """
+    try:
+        await page.add_style_tag(content=_LAYOUT_RESET_CSS)
+        # 触发一次 reflow，确保下一次 bounding_box 拿到新尺寸
+        await page.evaluate("() => void document.body.offsetHeight")
+    except Exception as exc:
+        logger.debug("[浏览器截图] 收紧渲染容器尺寸失败，忽略: %s", exc)
+
+
+async def auto_fit_viewport(page, selector: str, padding: int = 8):
+    """根据真实内容尺寸把 viewport 拉大（不缩小），避免内容超出 viewport 被截掉。
+
+    返回最终用于 clip 的 bounding box；调用方在 tighten_render_layout 之后调用。
+    """
+    box = await compute_content_bounding_box(page, selector)
+    if not box:
+        return None
+    current = page.viewport_size
+    if not current:
+        return box
+    target_w = max(int(box["x"] + box["width"]) + padding, current["width"])
+    target_h = max(int(box["y"] + box["height"]) + padding, current["height"])
+    if target_w == current["width"] and target_h == current["height"]:
+        return box
+    try:
+        await page.set_viewport_size({"width": target_w, "height": target_h})
+        await page.evaluate("() => void document.body.offsetHeight")
+    except Exception as exc:
+        logger.debug("[浏览器截图] 调整 viewport 失败，忽略: %s", exc)
+        return box
+    return await compute_content_bounding_box(page, selector) or box
+
+
+async def compute_content_bounding_box(page, selector: str):
+    """以 selector 命中的元素为根，扫描其全部可见子节点的外接矩形作为最终裁剪框。
+
+    用于 selector 自身被设了 min-height 或 padding，导致 bounding_box 包含大片空白时。
+    """
+    return await page.evaluate(
+        """
+        (selector) => {
+          const root = document.querySelector(selector);
+          if (!root) return null;
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          const nodes = [root, ...root.querySelectorAll('*')];
+          for (const el of nodes) {
+            const cs = getComputedStyle(el);
+            if (cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') continue;
+            const r = el.getBoundingClientRect();
+            if (r.width <= 0 || r.height <= 0) continue;
+            if (r.left < minX) minX = r.left;
+            if (r.top < minY) minY = r.top;
+            if (r.right > maxX) maxX = r.right;
+            if (r.bottom > maxY) maxY = r.bottom;
+          }
+          if (!isFinite(minX)) return null;
+          return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+        }
+        """,
+        selector,
+    )

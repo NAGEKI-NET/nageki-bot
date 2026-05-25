@@ -5,11 +5,25 @@ import logging
 from typing import Any, Dict
 
 try:
-    from .browser_fonts import register_browser_fonts, wait_for_browser_fonts
-    from .playwright_runtime import get_browser_timeout_ms, launch_playwright_chromium
+    from .browser_fonts import (
+        auto_fit_viewport,
+        compute_content_bounding_box,
+        register_browser_fonts,
+        tighten_render_layout,
+        wait_for_browser_fonts,
+    )
+    from .browser_pool import shared_browser_page
+    from .playwright_runtime import get_browser_timeout_ms
 except ImportError:
-    from browser_fonts import register_browser_fonts, wait_for_browser_fonts
-    from playwright_runtime import get_browser_timeout_ms, launch_playwright_chromium
+    from browser_fonts import (
+        auto_fit_viewport,
+        compute_content_bounding_box,
+        register_browser_fonts,
+        tighten_render_layout,
+        wait_for_browser_fonts,
+    )
+    from browser_pool import shared_browser_page
+    from playwright_runtime import get_browser_timeout_ms
 
 logger = logging.getLogger(__name__)
 
@@ -34,24 +48,16 @@ async def generate_profile_browser_image_bytes(
     api_client,
 ) -> bytes:
     try:
-        from playwright.async_api import async_playwright
+        import playwright.async_api  # noqa: F401  仅用于确认依赖存在
     except ImportError as exc:
         raise RuntimeError(
             "当前环境未安装 playwright，无法使用浏览器截图。"
             "请运行: pip install playwright && python -m playwright install chromium"
         ) from exc
 
-    browser = None
+    browser_timeout_ms = get_browser_timeout_ms()
     try:
-        async with async_playwright() as playwright:
-            browser_timeout_ms = get_browser_timeout_ms()
-            browser = await launch_playwright_chromium(playwright)
-            page = await browser.new_page(
-                viewport={"width": 1600, "height": 1280},
-                device_scale_factor=1,
-            )
-            page.set_default_timeout(browser_timeout_ms)
-            page.set_default_navigation_timeout(browser_timeout_ms)
+        async with shared_browser_page(viewport={"width": 1600, "height": 1280}) as page:
             init_payload = json.dumps(
                 {
                     "profile": profile,
@@ -87,12 +93,17 @@ async def generate_profile_browser_image_bytes(
                 """.replace("__NAGEKI_INIT_PAYLOAD__", init_payload)
             )
             render_url = getattr(api_client, "profile_render_url", None) or _get_frontend_render_url()
-            await page.goto(render_url, wait_until="networkidle", timeout=browser_timeout_ms)
+            await page.goto(render_url, wait_until="load", timeout=browser_timeout_ms)
             await wait_for_browser_fonts(page)
             await page.wait_for_function("window.__NAGEKI_RENDER_READY__ === true", timeout=browser_timeout_ms)
             render_root = page.locator(".ongeki-profile-render")
             await render_root.wait_for(state="visible", timeout=browser_timeout_ms)
-            box = await render_root.bounding_box()
+            await tighten_render_layout(page)
+            box = await auto_fit_viewport(page, ".ongeki-profile-render")
+            if not box:
+                box = await compute_content_bounding_box(page, ".ongeki-profile-render")
+            if not box:
+                box = await render_root.bounding_box()
             if not box:
                 raise RuntimeError("前端资料页截图区域不可用。")
             return await page.screenshot(
@@ -111,6 +122,3 @@ async def generate_profile_browser_image_bytes(
             "前端资料页截图失败，请确认 Playwright Chromium 已安装，"
             "并且 NAGEKI_PROFILE_RENDER_URL 指向可访问的前端 /render/ongeki-profile 页面。"
         ) from exc
-    finally:
-        if browser:
-            await browser.close()

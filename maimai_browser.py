@@ -4,13 +4,28 @@ import json
 import logging
 import os
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
 
 try:
-    from .browser_fonts import register_browser_fonts, wait_for_browser_fonts
-    from .playwright_runtime import get_browser_timeout_ms, launch_playwright_chromium
+    from .browser_fonts import (
+        auto_fit_viewport,
+        compute_content_bounding_box,
+        register_browser_fonts,
+        tighten_render_layout,
+        wait_for_browser_fonts,
+    )
+    from .browser_pool import shared_browser_page
+    from .playwright_runtime import get_browser_timeout_ms
 except ImportError:
-    from browser_fonts import register_browser_fonts, wait_for_browser_fonts
-    from playwright_runtime import get_browser_timeout_ms, launch_playwright_chromium
+    from browser_fonts import (
+        auto_fit_viewport,
+        compute_content_bounding_box,
+        register_browser_fonts,
+        tighten_render_layout,
+        wait_for_browser_fonts,
+    )
+    from browser_pool import shared_browser_page
+    from playwright_runtime import get_browser_timeout_ms
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +36,50 @@ def _get_maimai_profile_render_url() -> str:
 
 def _get_maimai_rating_render_url() -> str:
     return os.getenv("NAGEKI_MAIMAI_RATING_RENDER_URL", "https://next.nageki-net.com/render/maimai2-rating")
+
+
+_LANG_VARIANT_MAP = {
+    "zh": ("zh", "zh-CN", "zh-Hans", "zh_CN"),
+    "en": ("en", "en-US"),
+    "ja": ("ja", "ja-JP"),
+}
+
+
+def _append_lang_query(url: str, lang: str) -> str:
+    """在 URL 末尾追加 lang 查询参数（保留已有参数，已有同名则覆盖）。"""
+    parsed = urlparse(url)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query["lang"] = lang
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
+def _build_i18n_init_snippet(lang: str) -> str:
+    """生成在导航前注入的 i18n 设置代码，覆盖多种常见前端读取方式。"""
+    variants = _LANG_VARIANT_MAP.get(lang, (lang,))
+    primary = variants[0]
+    payload = {
+        "primary": primary,
+        "variants": list(variants),
+    }
+    return (
+        "(() => {"
+        f"  const payload = {json.dumps(payload)};"
+        "  const primary = payload.primary;"
+        "  const variants = payload.variants;"
+        "  const keys = ['selectedLanguage','language','lang','locale',"
+        "                'i18nextLng','vue-i18n-lang','userLanguage',"
+        "                'maimai-language','maimai-locale','app-language'];"
+        "  try { for (const k of keys) localStorage.setItem(k, primary); } catch (e) {}"
+        "  try { document.cookie = 'lang=' + primary + '; path=/'; "
+        "        document.cookie = 'locale=' + primary + '; path=/'; } catch (e) {}"
+        "  window.__NAGEKI_LANG__ = primary;"
+        "  window.__NAGEKI_LANG_VARIANTS__ = variants;"
+        "  try { Object.defineProperty(navigator, 'language',"
+        "    { configurable: true, get: () => primary }); } catch (e) {}"
+        "  try { Object.defineProperty(navigator, 'languages',"
+        "    { configurable: true, get: () => variants }); } catch (e) {}"
+        "})();"
+    )
 
 
 def _build_current_user(current_user: Optional[Dict[str, Any]], profile: Dict[str, Any]) -> Dict[str, Any]:
@@ -51,24 +110,16 @@ async def _generate_maimai_profile_browser_image_bytes(
     current_user: Optional[Dict[str, Any]] = None,
 ) -> bytes:
     try:
-        from playwright.async_api import async_playwright
+        import playwright.async_api  # noqa: F401
     except ImportError as exc:
         raise RuntimeError(
             "当前环境未安装 playwright，无法使用浏览器截图。"
             "请运行: pip install playwright && python -m playwright install chromium"
         ) from exc
 
-    browser = None
+    browser_timeout_ms = get_browser_timeout_ms()
     try:
-        async with async_playwright() as playwright:
-            browser_timeout_ms = get_browser_timeout_ms()
-            browser = await launch_playwright_chromium(playwright)
-            page = await browser.new_page(
-                viewport={"width": 1600, "height": 1280},
-                device_scale_factor=1,
-            )
-            page.set_default_timeout(browser_timeout_ms)
-            page.set_default_navigation_timeout(browser_timeout_ms)
+        async with shared_browser_page(viewport={"width": 1600, "height": 1280}) as page:
             init_payload = json.dumps(
                 {
                     "profile": profile,
@@ -79,7 +130,9 @@ async def _generate_maimai_profile_browser_image_bytes(
                 },
                 ensure_ascii=False,
             )
+            lang = getattr(api_client, "profile_render_language", "zh")
             await register_browser_fonts(page)
+            await page.add_init_script(_build_i18n_init_snippet(lang))
             await page.add_init_script(
                 """
                 (() => {
@@ -97,12 +150,18 @@ async def _generate_maimai_profile_browser_image_bytes(
                 """.replace("__NAGEKI_INIT_PAYLOAD__", init_payload)
             )
             render_url = getattr(api_client, "maimai_profile_render_url", None) or _get_maimai_profile_render_url()
-            await page.goto(render_url, wait_until="networkidle", timeout=browser_timeout_ms)
+            render_url = _append_lang_query(render_url, lang)
+            await page.goto(render_url, wait_until="load", timeout=browser_timeout_ms)
             await wait_for_browser_fonts(page)
             await page.wait_for_function("window.__NAGEKI_RENDER_READY__ === true", timeout=browser_timeout_ms)
             render_root = page.locator(".maimai2-profile-render")
             await render_root.wait_for(state="visible", timeout=browser_timeout_ms)
-            box = await render_root.bounding_box()
+            await tighten_render_layout(page)
+            box = await auto_fit_viewport(page, ".maimai2-profile-render")
+            if not box:
+                box = await compute_content_bounding_box(page, ".maimai2-profile-render")
+            if not box:
+                box = await render_root.bounding_box()
             if not box:
                 raise RuntimeError("前端 Maimai Profile 截图区域不可用。")
             return await page.screenshot(
@@ -121,9 +180,6 @@ async def _generate_maimai_profile_browser_image_bytes(
             "前端 Maimai Profile 页截图失败，请确认 Playwright Chromium 已安装，"
             "并且 NAGEKI_MAIMAI_PROFILE_RENDER_URL 指向可访问的前端 /render/maimai2-profile 页面。"
         ) from exc
-    finally:
-        if browser:
-            await browser.close()
 
 
 async def generate_maimai_rating_browser_image(
@@ -145,24 +201,16 @@ async def _generate_maimai_rating_browser_image_bytes(
     current_user: Optional[Dict[str, Any]] = None,
 ) -> bytes:
     try:
-        from playwright.async_api import async_playwright
+        import playwright.async_api  # noqa: F401
     except ImportError as exc:
         raise RuntimeError(
             "当前环境未安装 playwright，无法使用浏览器截图。"
             "请运行: pip install playwright && python -m playwright install chromium"
         ) from exc
 
-    browser = None
+    browser_timeout_ms = get_browser_timeout_ms()
     try:
-        async with async_playwright() as playwright:
-            browser_timeout_ms = get_browser_timeout_ms()
-            browser = await launch_playwright_chromium(playwright)
-            page = await browser.new_page(
-                viewport={"width": 1600, "height": 2600},
-                device_scale_factor=1,
-            )
-            page.set_default_timeout(browser_timeout_ms)
-            page.set_default_navigation_timeout(browser_timeout_ms)
+        async with shared_browser_page(viewport={"width": 1600, "height": 2600}) as page:
             init_payload = json.dumps(
                 {
                     "profile": profile,
@@ -174,7 +222,9 @@ async def _generate_maimai_rating_browser_image_bytes(
                 },
                 ensure_ascii=False,
             )
+            lang = getattr(api_client, "profile_render_language", "zh")
             await register_browser_fonts(page)
+            await page.add_init_script(_build_i18n_init_snippet(lang))
             await page.add_init_script(
                 """
                 (() => {
@@ -193,12 +243,18 @@ async def _generate_maimai_rating_browser_image_bytes(
                 """.replace("__NAGEKI_INIT_PAYLOAD__", init_payload)
             )
             render_url = getattr(api_client, "maimai_rating_render_url", None) or _get_maimai_rating_render_url()
-            await page.goto(render_url, wait_until="networkidle", timeout=browser_timeout_ms)
+            render_url = _append_lang_query(render_url, lang)
+            await page.goto(render_url, wait_until="load", timeout=browser_timeout_ms)
             await wait_for_browser_fonts(page)
             await page.wait_for_function("window.__NAGEKI_RENDER_READY__ === true", timeout=browser_timeout_ms)
             render_root = page.locator(".maimai2-rating-render")
             await render_root.wait_for(state="visible", timeout=browser_timeout_ms)
-            box = await render_root.bounding_box()
+            await tighten_render_layout(page)
+            box = await auto_fit_viewport(page, ".maimai2-rating-render")
+            if not box:
+                box = await compute_content_bounding_box(page, ".maimai2-rating-render")
+            if not box:
+                box = await render_root.bounding_box()
             if not box:
                 raise RuntimeError("前端 Maimai Rating 截图区域不可用。")
             return await page.screenshot(
@@ -217,6 +273,3 @@ async def _generate_maimai_rating_browser_image_bytes(
             "前端 Maimai Rating 页截图失败，请确认 Playwright Chromium 已安装，"
             "并且 NAGEKI_MAIMAI_RATING_RENDER_URL 指向可访问的前端 /render/maimai2-rating 页面。"
         ) from exc
-    finally:
-        if browser:
-            await browser.close()
