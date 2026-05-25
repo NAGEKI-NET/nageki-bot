@@ -200,8 +200,8 @@ class NagekiBot(Star):
         elif message_str == "nageki rating":
             async for result in self._handle_rating_command(event):
                 yield result
-        # 处理 B50 命令：nageki b50
-        elif message_str == "nageki b50":
+        # 处理 B50 命令：绝赞 b50
+        elif message_str == "绝赞 b50":
             async for result in self._handle_b50_command(event):
                 yield result
         # 处理健康检查命令：nageki health
@@ -514,7 +514,7 @@ class NagekiBot(Star):
             yield event.plain_result(f"发生错误: {str(e)}")
 
     async def _handle_b50_command(self, event: AstrMessageEvent):
-        """处理 B50 命令：nageki b50"""
+        """处理 B50 命令：绝赞 b50"""
         try:
             if not self.api_client.bot_api_key:
                 yield event.plain_result(
