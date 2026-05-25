@@ -71,6 +71,21 @@ def _user_data_dir() -> Path:
     return path
 
 
+_LOCALE_MAP = {"zh": "zh-CN", "en": "en-US", "ja": "ja-JP"}
+
+
+def _browser_locale() -> str:
+    """根据 NAGEKI_PROFILE_RENDER_LANGUAGE 推断 Chromium locale。
+
+    控制 navigator.language + Accept-Language header，让前端默认走对应语言。
+    """
+    raw = os.getenv("NAGEKI_BROWSER_LOCALE", "").strip()
+    if raw:
+        return raw
+    lang = os.getenv("NAGEKI_PROFILE_RENDER_LANGUAGE", "zh").strip().lower()
+    return _LOCALE_MAP.get(lang, lang or "zh-CN")
+
+
 # 精简启动参数，2 核机友好：少进程、少后台活动、关 GPU。
 _LEAN_CHROMIUM_ARGS = (
     "--no-sandbox",
@@ -115,11 +130,16 @@ async def _ensure_context():
         await ensure_playwright_chromium(_playwright_ctx)
 
         try:
+            locale = _browser_locale()
             _context = await _playwright_ctx.chromium.launch_persistent_context(
                 user_data_dir=str(_user_data_dir()),
                 args=list(_LEAN_CHROMIUM_ARGS),
                 chromium_sandbox=False,
                 timeout=get_browser_timeout_ms(),
+                locale=locale,
+                extra_http_headers={
+                    "Accept-Language": f"{locale},{locale.split('-')[0]};q=0.9",
+                },
             )
         except Exception:
             try:
@@ -131,8 +151,9 @@ async def _ensure_context():
             raise
 
         logger.info(
-            "[浏览器截图] 共享 Chromium 已就绪（持久化 profile=%s）。",
+            "[浏览器截图] 共享 Chromium 已就绪（profile=%s, locale=%s）。",
             _user_data_dir(),
+            locale,
         )
         return _context
 

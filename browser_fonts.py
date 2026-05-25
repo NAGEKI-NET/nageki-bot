@@ -195,7 +195,7 @@ async def tighten_render_layout(page) -> None:
         logger.debug("[浏览器截图] 收紧渲染容器尺寸失败，忽略: %s", exc)
 
 
-async def wait_for_render_images(page, selector: str, per_image_timeout_ms: int = 2000) -> None:
+async def wait_for_render_images(page, selector: str, per_image_timeout_ms: int = 5000) -> None:
     """等 selector 范围内所有 <img> 加载完成，避免在 jacket 图还没下完时就截图。
 
     - 已完成的图（成功 OR 失败）立即放过，不等待。

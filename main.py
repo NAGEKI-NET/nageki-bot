@@ -99,6 +99,19 @@ class NagekiBot(Star):
             return event.chain_result([Comp.Image.fromBase64(base64_data)])
         return event.image_result(image_ref)
     
+    def _format_error(self, e: Exception, prefix: str = "发生错误") -> str:
+        """通用错误消息格式化，识别"未绑定"等典型 API 错误转友好提示。"""
+        if isinstance(e, NagekiApiException):
+            msg = " ".join(filter(None, [e.message, e.raw_response]))
+            lower = msg.lower()
+            if "未绑定" in msg or "not bound" in lower or "unbound" in lower:
+                return (
+                    "❌ 该 QQ 还未绑定 Nageki 账号\n"
+                    "请前往 https://next.nageki-net.com/net/profile 获取绑定码\n"
+                    "然后使用 `nageki 绑定 <绑定码>` 完成绑定"
+                )
+        return f"{prefix}: {e}"
+
     def _format_bot_token_error(self, e: NagekiApiException) -> str:
         error_text = f"{e.message}\n{e.raw_response or ''}"
         if (
@@ -291,7 +304,7 @@ class NagekiBot(Star):
                 yield event.plain_result(f"绑定失败：服务器返回错误 {e.status}")
         except Exception as e:
             logger.error(f"[绑定命令] 处理出错: {type(e).__name__}: {e}", exc_info=True)
-            yield event.plain_result(f"绑定时发生错误: {str(e)}")
+            yield event.plain_result(self._format_error(e, "绑定时发生错误"))
     
     async def _handle_check_bind_command(self, event: AstrMessageEvent, message_str: str):
         """处理查询绑定状态命令：nageki check <QQ号>"""
@@ -337,7 +350,7 @@ class NagekiBot(Star):
                 yield event.plain_result(f"查询失败：服务器返回错误 {e.status}")
         except Exception as e:
             logger.error(f"查询绑定状态命令处理出错: {e}", exc_info=True)
-            yield event.plain_result(f"查询时发生错误: {str(e)}")
+            yield event.plain_result(self._format_error(e, "查询时发生错误"))
     
     async def _handle_profile_command(self, event: AstrMessageEvent, message_str: str):
         """处理查询资料命令：nageki profile"""
@@ -429,7 +442,7 @@ class NagekiBot(Star):
             yield event.plain_result(f"线上资料截图生成失败: {str(e)}")
         except Exception as e:
             logger.error(f"查询资料命令处理出错: {e}", exc_info=True)
-            yield event.plain_result(f"查询时发生错误: {str(e)}")
+            yield event.plain_result(self._format_error(e, "查询时发生错误"))
     
     async def _handle_rating_command(self, event: AstrMessageEvent):
         """处理 Rating 命令：nageki rating"""
@@ -511,7 +524,7 @@ class NagekiBot(Star):
             yield event.plain_result(f"线上 Rating 截图生成失败: {str(e)}")
         except Exception as e:
             logger.error(f"Rating命令处理出错: {e}", exc_info=True)
-            yield event.plain_result(f"发生错误: {str(e)}")
+            yield event.plain_result(self._format_error(e, "发生错误"))
 
     async def _handle_b50_command(self, event: AstrMessageEvent):
         """处理 B50 命令：绝赞 b50"""
@@ -596,7 +609,7 @@ class NagekiBot(Star):
             yield event.plain_result(f"线上 Maimai B50 截图生成失败: {str(e)}")
         except Exception as e:
             logger.error(f"B50命令处理出错: {e}", exc_info=True)
-            yield event.plain_result(f"发生错误: {str(e)}")
+            yield event.plain_result(self._format_error(e, "发生错误"))
 
     async def _handle_maimai_profile_command(self, event: AstrMessageEvent):
         """处理 Maimai 资料命令：nageki maiprofile"""
@@ -650,7 +663,7 @@ class NagekiBot(Star):
             yield event.plain_result(f"线上 Maimai 资料截图生成失败: {str(e)}")
         except Exception as e:
             logger.error(f"[Maimai资料命令] 处理出错: {e}", exc_info=True)
-            yield event.plain_result(f"查询时发生错误: {str(e)}")
+            yield event.plain_result(self._format_error(e, "查询时发生错误"))
 
     async def _handle_health_command(self, event: AstrMessageEvent):
         """处理健康检查命令：nageki health"""
@@ -683,7 +696,7 @@ class NagekiBot(Star):
                 yield event.plain_result(f"健康检查失败：服务器返回错误 {e.status}")
         except Exception as e:
             logger.error(f"健康检查命令处理出错: {e}", exc_info=True)
-            yield event.plain_result(f"健康检查时发生错误: {str(e)}")
+            yield event.plain_result(self._format_error(e, "健康检查时发生错误"))
     
     async def terminate(self):
         """插件销毁"""
