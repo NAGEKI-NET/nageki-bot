@@ -125,37 +125,11 @@ async def _ensure_context():
             _playwright_ctx = None
             raise
 
-        # 让 jacket 封面不进 Chromium 磁盘缓存：拦截后强行 fetch + no-store。
-        await _context.route("**/jacket/**", _no_cache_jacket_route)
-
         logger.info(
             "[浏览器截图] 共享 Chromium 已就绪（持久化 profile=%s）。",
             _user_data_dir(),
         )
         return _context
-
-
-async def _no_cache_jacket_route(route):
-    """拦截 jacket 请求，绕过磁盘缓存并强制响应 no-store。"""
-    try:
-        response = await route.fetch()
-        body = await response.body()
-        headers = dict(response.headers)
-        headers["cache-control"] = "no-store, max-age=0"
-        headers.pop("etag", None)
-        headers.pop("last-modified", None)
-        headers.pop("expires", None)
-        await route.fulfill(
-            status=response.status,
-            headers=headers,
-            body=body,
-        )
-    except Exception as exc:
-        logger.debug("[浏览器截图] jacket 拦截失败回退原请求: %s", exc)
-        try:
-            await route.continue_()
-        except Exception:
-            pass
 
 
 @asynccontextmanager

@@ -79,6 +79,17 @@ class NagekiBot(Star):
         
         logger.info(f"[初始化] API客户端已创建，bot_api_key已设置: {bool(self.api_client.bot_api_key)}")
 
+    @staticmethod
+    def _image_log_summary(image_ref: str) -> str:
+        """日志友好的图片引用摘要，避免把 base64 全文打出来。"""
+        if not image_ref:
+            return "<empty>"
+        if image_ref.startswith("base64://"):
+            return f"<base64 image, {len(image_ref) - len('base64://')} chars>"
+        if image_ref.startswith("data:image/"):
+            return f"<data url image, {len(image_ref)} chars>"
+        return image_ref
+
     def _image_result(self, event: AstrMessageEvent, image_ref: str) -> MessageEventResult:
         if image_ref.startswith("base64://"):
             base64_data = image_ref.removeprefix("base64://")
@@ -482,7 +493,7 @@ class NagekiBot(Star):
                 categories,
                 api_client=self.api_client
             )
-            logger.info(f"[Rating命令] 图片生成完成: {actual_path}")
+            logger.info(f"[Rating命令] 图片生成完成: {self._image_log_summary(actual_path)}")
             
             # 4. 发送图片
             logger.info(f"[Rating命令] 准备发送图片")
@@ -567,7 +578,7 @@ class NagekiBot(Star):
                 api_client=self.api_client,
                 current_user=current_user
             )
-            logger.info(f"[B50命令] 图片生成完成: {actual_path}")
+            logger.info(f"[B50命令] 图片生成完成: {self._image_log_summary(actual_path)}")
             
             # 4. 发送图片
             logger.info(f"[B50命令] 准备发送图片")
