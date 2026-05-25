@@ -18,20 +18,13 @@ class RatingDataProcessor:
 
     async def load_music_list(self, token: Optional[str] = None):
         """加载 Ongeki 音乐列表。"""
-        if not self.music_list:
-            self.music_list = await self.api_client.get_music_list(token=token)
-            self.api_client.save_music_cache(self.music_list)
-            self.music_cache = {}
-            for music in self.music_list:
-                self.music_cache[music.get("id")] = music
+        if self.music_list:
             return
 
-        cached = self.api_client.load_music_cache()
-        if cached:
-            self.music_list = cached
-            self.music_cache = {}
-            for music in self.music_list:
-                self.music_cache[music.get("id")] = music
+        self.music_list = await self.api_client.get_music_list(token=token)
+        self.music_cache = {}
+        for music in self.music_list:
+            self.music_cache[music.get("id")] = music
 
     async def load_maimai_music_list(self, token: Optional[str] = None):
         """加载 Maimai 音乐列表。"""

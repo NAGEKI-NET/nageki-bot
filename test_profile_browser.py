@@ -1,25 +1,24 @@
 """
-独立测试脚本：渲染 Profile 浏览器截图并保存预览图。
+独立测试脚本：渲染 Profile 浏览器截图并校验 base64 图片。
 
 运行前需要安装：
-    pip install playwright pillow
+    pip install playwright
     python -m playwright install chromium
 
-并启动 NAGEKI-NET-NEXT 前端服务，默认地址：
-    http://localhost:4200/render/ongeki-profile
+默认使用线上 NAGEKI-NET-NEXT 前端：
+    https://next.nageki-net.com/render/ongeki-profile
 """
 
 import asyncio
 import base64
 import os
-from pathlib import Path
 
 from profile_browser import generate_profile_browser_image
 
 
 class MockApiClient:
     cdn_base_url = "https://cdn-nageki-next.sys-all.com.cn"
-    profile_render_url = "http://localhost:4200/render/ongeki-profile"
+    profile_render_url = os.getenv("NAGEKI_PROFILE_RENDER_URL", "https://next.nageki-net.com/render/ongeki-profile")
     profile_render_theme = os.getenv("NAGEKI_PROFILE_RENDER_THEME", "dark")
     profile_render_language = os.getenv("NAGEKI_PROFILE_RENDER_LANGUAGE", "zh")
 
@@ -69,20 +68,8 @@ async def main():
         raise RuntimeError(f"截图返回格式异常: {image_url[:40]}")
 
     image_bytes = base64.b64decode(image_url.removeprefix("base64://"))
-    output_path = Path(__file__).parent / "assets" / "profile_browser_test.png"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_bytes(image_bytes)
-
-    print(f"截图成功: {output_path}")
+    print("截图成功")
     print(f"图片大小: {len(image_bytes):,} bytes")
-
-    try:
-        from PIL import Image
-
-        with Image.open(output_path) as image:
-            print(f"图片尺寸: {image.width}x{image.height}")
-    except ImportError:
-        print("未安装 pillow，跳过尺寸检查。")
 
 
 if __name__ == "__main__":

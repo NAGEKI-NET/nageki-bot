@@ -1,4 +1,5 @@
 import base64
+import json
 import logging
 from functools import lru_cache
 from pathlib import Path
@@ -82,19 +83,57 @@ select,
     )
 
 
+async def register_browser_fonts(page) -> None:
+    """在导航前通过 init script 注入 @font-face，让首屏渲染就能用上内置字体。"""
+    css = get_browser_font_css()
+    if not css:
+        logger.warning("[浏览器截图] 未加载到内置字体，继续使用系统字体。")
+        return
+
+    script = (
+        "(() => {"
+        f"  const css = {json.dumps(css)};"
+        "  const apply = () => {"
+        "    if (document.querySelector('style[data-nageki-fonts]')) return;"
+        "    const style = document.createElement('style');"
+        "    style.setAttribute('data-nageki-fonts', '1');"
+        "    style.textContent = css;"
+        "    (document.head || document.documentElement).appendChild(style);"
+        "  };"
+        "  if (document.documentElement) {"
+        "    apply();"
+        "  } else {"
+        "    new MutationObserver((_, obs) => {"
+        "      if (document.documentElement) { apply(); obs.disconnect(); }"
+        "    }).observe(document, { childList: true, subtree: true });"
+        "  }"
+        "})();"
+    )
+    await page.add_init_script(script)
+
+
+async def wait_for_browser_fonts(page) -> None:
+    """导航后等待 @font-face 全部加载完成，避免文字以回退字体测量/绘制。"""
+    try:
+        await page.evaluate(
+            """
+            async () => {
+              if (document.fonts && document.fonts.ready) {
+                await document.fonts.ready;
+              }
+            }
+            """
+        )
+    except Exception as exc:
+        logger.debug("[浏览器截图] 等待字体就绪失败，忽略: %s", exc)
+
+
 async def inject_browser_fonts(page) -> None:
+    """向后兼容：等价于 register + wait，但用于已经 goto 完成的场景。"""
     css = get_browser_font_css()
     if not css:
         logger.warning("[浏览器截图] 未加载到内置字体，继续使用系统字体。")
         return
 
     await page.add_style_tag(content=css)
-    await page.evaluate(
-        """
-        async () => {
-          if (document.fonts && document.fonts.ready) {
-            await document.fonts.ready;
-          }
-        }
-        """
-    )
+    await wait_for_browser_fonts(page)

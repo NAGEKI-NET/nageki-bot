@@ -20,12 +20,18 @@ NAGEKI_CDN_URL = "https://cdn-nageki-next.sys-all.com.cn"
 NAGEKI_TOKEN = "your_jwt_token_here"
 
 # 前端资料截图渲染页地址
-# 默认使用本机 Angular 开发服务；生产环境可改为已部署前端的 /render/ongeki-profile
-NAGEKI_PROFILE_RENDER_URL = "http://localhost:4200/render/ongeki-profile"
+# 默认使用线上前端渲染页
+NAGEKI_PROFILE_RENDER_URL = "https://next.nageki-net.com/render/ongeki-profile"
 
 # 前端 Rating 截图渲染页地址
-# 默认使用本机 Angular 开发服务；生产环境可改为已部署前端的 /render/ongeki-rating
-NAGEKI_RATING_RENDER_URL = "http://localhost:4200/render/ongeki-rating"
+# 默认使用线上前端渲染页
+NAGEKI_RATING_RENDER_URL = "https://next.nageki-net.com/render/ongeki-rating"
+
+# 前端 Maimai 资料截图渲染页地址
+NAGEKI_MAIMAI_PROFILE_RENDER_URL = "https://next.nageki-net.com/render/maimai2-profile"
+
+# 前端 Maimai Rating 截图渲染页地址
+NAGEKI_MAIMAI_RATING_RENDER_URL = "https://next.nageki-net.com/render/maimai2-rating"
 
 # 前端截图主题：dark 或 light
 NAGEKI_PROFILE_RENDER_THEME = "dark"
@@ -33,9 +39,9 @@ NAGEKI_PROFILE_RENDER_THEME = "dark"
 # 前端截图语言：zh、en 或 ja
 NAGEKI_PROFILE_RENDER_LANGUAGE = "zh"
 
-# 缺少 Playwright Chromium 时自动执行：
-# python -m playwright install chromium
-NAGEKI_PLAYWRIGHT_AUTO_INSTALL = True
+# 是否允许缺少 Playwright Chromium 时运行时自动安装。
+# 默认关闭，建议部署时手动执行 python -m playwright install chromium
+NAGEKI_PLAYWRIGHT_AUTO_INSTALL = False
 
 # 浏览器截图超时时间（秒）
 # 用于启动浏览器、打开渲染页、等待前端 ready 和截图
@@ -49,9 +55,9 @@ NAGEKI_PLAYWRIGHT_INSTALL_WITH_DEPS = False
 
 # ========== QQ机器人API 配置 ==========
 
-# QQ机器人API服务器地址（测试阶段默认：http://localhost:8080）
-# 不配置时默认使用 localhost:8080，方便本地测试
-BOT_API_URL = "http://localhost:8080"
+# QQ机器人API服务器地址
+# 不配置时默认使用线上 API
+BOT_API_URL = "https://nageki-net.com"
 
 # QQ机器人API密钥（必需，用于QQ机器人API认证）
 # 所有QQ机器人API请求都需要在HTTP Header中携带此密钥：X-Bot-Api-Key

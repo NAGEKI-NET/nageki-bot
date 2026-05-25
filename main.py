@@ -7,9 +7,7 @@ import aiohttp
 
 from .nageki_api import NagekiApiClient, NagekiApiException
 from .rating_data import RatingDataProcessor
-from .rating_canvas import generate_rating_canvas_image
 from .rating_browser import generate_rating_browser_image
-from .profile_canvas import generate_profile_canvas_image
 from .profile_browser import generate_profile_browser_image
 from .maimai_browser import generate_maimai_profile_browser_image, generate_maimai_rating_browser_image
 
@@ -33,22 +31,19 @@ class NagekiBot(Star):
     
     def _init_api_client(self):
         """初始化 API 客户端"""
-        plugin_dir = os.path.dirname(__file__)
-        cache_dir = os.path.join(plugin_dir, "cache")
-        
         # 从配置或环境变量获取 API 地址和 token
         # 注意：实际使用时需要配置这些值
         api_url = self._get_plugin_config_value("NAGEKI_API_URL", "https://nageki-net.com/")
         cdn_url = self._get_plugin_config_value("NAGEKI_CDN_URL", "https://cdn-nageki-next.sys-all.com.cn")
         token = self._get_plugin_config_value("NAGEKI_TOKEN")
         
-        # QQ机器人API配置（测试阶段默认使用localhost和测试密钥）
-        # 默认使用测试密钥，方便测试
+        # QQ机器人 API 配置
         bot_api_key = self._get_plugin_config_value("BOT_API_KEY", "")
-        # 默认使用localhost:8080，方便测试
-        bot_api_url = self._get_plugin_config_value("BOT_API_URL", "http://localhost:8080")
-        profile_render_url = self._get_plugin_config_value("NAGEKI_PROFILE_RENDER_URL", "http://localhost:4200/render/ongeki-profile")
-        rating_render_url = self._get_plugin_config_value("NAGEKI_RATING_RENDER_URL", "http://localhost:4200/render/ongeki-rating")
+        bot_api_url = self._get_plugin_config_value("BOT_API_URL", "https://nageki-net.com")
+        profile_render_url = self._get_plugin_config_value("NAGEKI_PROFILE_RENDER_URL", "https://next.nageki-net.com/render/ongeki-profile")
+        rating_render_url = self._get_plugin_config_value("NAGEKI_RATING_RENDER_URL", "https://next.nageki-net.com/render/ongeki-rating")
+        maimai_profile_render_url = self._get_plugin_config_value("NAGEKI_MAIMAI_PROFILE_RENDER_URL", "https://next.nageki-net.com/render/maimai2-profile")
+        maimai_rating_render_url = self._get_plugin_config_value("NAGEKI_MAIMAI_RATING_RENDER_URL", "https://next.nageki-net.com/render/maimai2-rating")
         profile_render_theme = self._get_plugin_config_value("NAGEKI_PROFILE_RENDER_THEME", "dark")
         profile_render_language = self._get_plugin_config_value("NAGEKI_PROFILE_RENDER_LANGUAGE", "zh")
         for key in (
@@ -71,11 +66,12 @@ class NagekiBot(Star):
             api_base_url=api_url,
             cdn_base_url=cdn_url,
             token=token,
-            cache_dir=cache_dir,
             bot_api_key=bot_api_key,
             bot_api_url=bot_api_url,
             profile_render_url=profile_render_url,
             rating_render_url=rating_render_url,
+            maimai_profile_render_url=maimai_profile_render_url,
+            maimai_rating_render_url=maimai_rating_render_url,
             profile_render_theme=profile_render_theme,
             profile_render_language=profile_render_language
         )
@@ -92,6 +88,16 @@ class NagekiBot(Star):
         return event.image_result(image_ref)
     
     def _format_bot_token_error(self, e: NagekiApiException) -> str:
+        error_text = f"{e.message}\n{e.raw_response or ''}"
+        if (
+            e.status >= 500
+            and (
+                "api/game/ongeki/profile" in error_text
+                or "用户不存在" in error_text
+                or "鐢ㄦ埛涓嶅瓨鍦" in error_text
+            )
+        ):
+            return "该卡号没有 Ongeki 数据，请先用这张卡游玩并上传一次 Ongeki 数据后再查询。"
         if e.status == 401:
             return "认证失败：请检查 BOT_API_KEY 是否正确"
         if e.status == 404:
@@ -388,19 +394,11 @@ class NagekiBot(Star):
             logger.info(f"[查询资料命令] Net API返回数据: {result}")
             logger.info(f"[查询资料命令] Net API返回数据的所有键: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
             
-            try:
-                image_url = await generate_profile_browser_image(
-                    "",
-                    result,
-                    api_client=self.api_client
-                )
-            except Exception as browser_error:
-                logger.warning(f"[查询资料命令] 浏览器截图失败，回退到 canvas: {browser_error}")
-                image_url = await generate_profile_canvas_image(
-                    "",
-                    result,
-                    api_client=self.api_client
-                )
+            image_url = await generate_profile_browser_image(
+                "",
+                result,
+                api_client=self.api_client
+            )
             yield self._image_result(event, image_url)
             
         except aiohttp.ClientResponseError as e:
@@ -412,14 +410,11 @@ class NagekiBot(Star):
             else:
                 yield event.plain_result(f"查询失败：服务器返回错误 {e.status}")
         except NagekiApiException as e:
-            logger.error(f"[鏌ヨ璧勬枡鍛戒护] Bot API閿欒: {e.status} - {e.message}")
+            logger.error(f"[查询资料命令] Bot API错误: {e.status} - {e.message}")
             yield event.plain_result(self._format_bot_token_error(e))
         except RuntimeError as e:
-            if "Pillow" in str(e):
-                yield event.plain_result("当前环境未安装 pillow，无法绘制图片。")
-            else:
-                logger.error(f"生成资料图片错误: {e}", exc_info=True)
-                yield event.plain_result(f"生成资料图片时发生错误: {str(e)}")
+            logger.error(f"生成资料图片错误: {e}", exc_info=True)
+            yield event.plain_result(f"线上资料截图生成失败: {str(e)}")
         except Exception as e:
             logger.error(f"查询资料命令处理出错: {e}", exc_info=True)
             yield event.plain_result(f"查询时发生错误: {str(e)}")
@@ -479,26 +474,14 @@ class NagekiBot(Star):
             logger.info(f"[Rating命令] 数据处理完成: Profile={profile.get('userName')}, Categories={len(categories)}")
             
             # 3. 生成图片
-            output_path = ""
-            
-            try:
-                logger.info(f"[Rating命令] 开始浏览器截图渲染")
-                actual_path = await generate_rating_browser_image(
-                    output_path,
-                    profile,
-                    categories,
-                    api_client=self.api_client
-                )
-            except Exception as browser_error:
-                logger.warning(f"[Rating命令] 浏览器截图失败，回退到 canvas: {browser_error}")
-                logger.info(f"[Rating命令] 开始绘制 Pillow 回退图片")
-                actual_path = await generate_rating_canvas_image(
-                    output_path,
-                    profile,
-                    categories,
-                    api_client=self.api_client
-                )
-            logger.info(f"[Rating命令] 图片绘制完成: {actual_path}")
+            logger.info(f"[Rating命令] 开始浏览器截图渲染")
+            actual_path = await generate_rating_browser_image(
+                "",
+                profile,
+                categories,
+                api_client=self.api_client
+            )
+            logger.info(f"[Rating命令] 图片生成完成: {actual_path}")
             
             # 4. 发送图片
             logger.info(f"[Rating命令] 准备发送图片")
@@ -512,11 +495,8 @@ class NagekiBot(Star):
             else:
                 yield event.plain_result(f"请求失败：服务器返回错误 {e.status}")
         except RuntimeError as e:
-            if "Pillow" in str(e):
-                yield event.plain_result("当前环境未安装 pillow，无法绘制图片。")
-            else:
-                logger.error(f"生成图片错误: {e}", exc_info=True)
-                yield event.plain_result(f"生成图片时发生错误: {str(e)}")
+            logger.error(f"生成图片错误: {e}", exc_info=True)
+            yield event.plain_result(f"线上 Rating 截图生成失败: {str(e)}")
         except Exception as e:
             logger.error(f"Rating命令处理出错: {e}", exc_info=True)
             yield event.plain_result(f"发生错误: {str(e)}")
@@ -577,30 +557,16 @@ class NagekiBot(Star):
             logger.info(f"[B50命令] 数据处理完成: Profile={profile.get('userName')}, Categories={len(categories)}")
             
             current_user = await self._get_user_profile_for_browser(token, profile)
-            plugin_dir = os.path.dirname(__file__)
-            output_dir = os.path.join(plugin_dir, "assets")
-            output_path = os.path.join(output_dir, "nageki_b50.png")
 
-            logger.info(f"[B50命令] 开始生成 Maimai B50 网页截图: {output_path}")
-            try:
-                actual_path = await generate_maimai_rating_browser_image(
-                    output_path,
-                    profile,
-                    api_client=self.api_client,
-                    token=token,
-                    current_user=current_user
-                )
-            except Exception as browser_error:
-                logger.warning(f"[B50命令] 网页截图失败，回退到 canvas: {browser_error}")
-                yield event.plain_result("Maimai 网页截图失败，正在回退到本地渲染，请稍候...")
-                actual_path = await generate_rating_canvas_image(
-                    output_path,
-                    profile,
-                    categories,
-                    api_client=self.api_client,
-                    game="maimai"
-                )
-            logger.info(f"[B50命令] 图片绘制完成: {actual_path}")
+            logger.info(f"[B50命令] 开始生成 Maimai B50 网页截图")
+            actual_path = await generate_maimai_rating_browser_image(
+                "",
+                profile,
+                categories,
+                api_client=self.api_client,
+                current_user=current_user
+            )
+            logger.info(f"[B50命令] 图片生成完成: {actual_path}")
             
             # 4. 发送图片
             logger.info(f"[B50命令] 准备发送图片")
@@ -614,11 +580,8 @@ class NagekiBot(Star):
             else:
                 yield event.plain_result(f"请求失败：服务器返回错误 {e.status}")
         except RuntimeError as e:
-            if "Pillow" in str(e):
-                yield event.plain_result("当前环境未安装 pillow，无法绘制图片。")
-            else:
-                logger.error(f"生成图片错误: {e}", exc_info=True)
-                yield event.plain_result(f"生成图片时发生错误: {str(e)}")
+            logger.error(f"生成图片错误: {e}", exc_info=True)
+            yield event.plain_result(f"线上 Maimai B50 截图生成失败: {str(e)}")
         except Exception as e:
             logger.error(f"B50命令处理出错: {e}", exc_info=True)
             yield event.plain_result(f"发生错误: {str(e)}")
@@ -653,23 +616,12 @@ class NagekiBot(Star):
             current_user = await self._get_user_profile_for_browser(token, profile)
             logger.info(f"[Maimai资料命令] 资料获取完成: {profile.get('userName')}")
 
-            try:
-                image_url = await generate_maimai_profile_browser_image(
-                    "",
-                    profile,
-                    api_client=self.api_client,
-                    token=token,
-                    current_user=current_user
-                )
-            except Exception as browser_error:
-                logger.warning(f"[Maimai资料命令] 浏览器截图失败，回退到 canvas: {browser_error}")
-                yield event.plain_result("Maimai 资料页截图失败，正在回退到本地渲染，请稍候...")
-                image_url = await generate_profile_canvas_image(
-                    "",
-                    profile,
-                    api_client=self.api_client,
-                    game="maimai"
-                )
+            image_url = await generate_maimai_profile_browser_image(
+                "",
+                profile,
+                api_client=self.api_client,
+                current_user=current_user
+            )
             yield self._image_result(event, image_url)
 
         except NagekiApiException as e:
@@ -682,11 +634,8 @@ class NagekiBot(Star):
             else:
                 yield event.plain_result(f"查询失败：服务器返回错误 {e.status}")
         except RuntimeError as e:
-            if "Pillow" in str(e):
-                yield event.plain_result("当前环境未安装 pillow，无法绘制图片。")
-            else:
-                logger.error(f"[Maimai资料命令] 生成图片错误: {e}", exc_info=True)
-                yield event.plain_result(f"生成图片时发生错误: {str(e)}")
+            logger.error(f"[Maimai资料命令] 生成图片错误: {e}", exc_info=True)
+            yield event.plain_result(f"线上 Maimai 资料截图生成失败: {str(e)}")
         except Exception as e:
             logger.error(f"[Maimai资料命令] 处理出错: {e}", exc_info=True)
             yield event.plain_result(f"查询时发生错误: {str(e)}")

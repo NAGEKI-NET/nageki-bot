@@ -25,11 +25,12 @@ class NagekiApiClient:
         api_base_url: Optional[str] = None,
         cdn_base_url: Optional[str] = None,
         token: Optional[str] = None,
-        cache_dir: Optional[str] = None,
         bot_api_key: Optional[str] = None,
         bot_api_url: Optional[str] = None,
         profile_render_url: Optional[str] = None,
         rating_render_url: Optional[str] = None,
+        maimai_profile_render_url: Optional[str] = None,
+        maimai_rating_render_url: Optional[str] = None,
         profile_render_theme: Optional[str] = None,
         profile_render_language: Optional[str] = None
     ):
@@ -40,11 +41,12 @@ class NagekiApiClient:
             api_base_url: API 服务器地址（默认从环境变量或配置文件读取）
             cdn_base_url: CDN 服务器地址（默认从环境变量或配置文件读取）
             token: JWT token（用于认证）
-            cache_dir: 缓存目录（用于存储图片和音乐数据）
             bot_api_key: QQ机器人API密钥（用于QQ机器人API认证）
             bot_api_url: QQ机器人API服务器地址
             profile_render_url: 前端资料截图渲染页地址
             rating_render_url: 前端 Rating 截图渲染页地址
+            maimai_profile_render_url: 前端 Maimai 资料截图渲染页地址
+            maimai_rating_render_url: 前端 Maimai Rating 截图渲染页地址
             profile_render_theme: 前端截图主题（light 或 dark）
             profile_render_language: 前端截图语言（zh、en 或 ja）
         """
@@ -52,15 +54,14 @@ class NagekiApiClient:
         self.api_base_url = api_base_url or os.getenv("NAGEKI_API_URL", "https://nageki-net.com/")
         self.cdn_base_url = cdn_base_url or os.getenv("NAGEKI_CDN_URL", "https://cdn-nageki-next.sys-all.com.cn")
         self.token = token or os.getenv("NAGEKI_TOKEN")
-        self.cache_dir = cache_dir
         
-        # QQ机器人API配置（测试阶段默认使用localhost和测试密钥）
-        # 默认使用测试密钥，方便测试
+        # QQ机器人 API 配置
         self.bot_api_key = bot_api_key or os.getenv("BOT_API_KEY", "")
-        # 默认使用localhost:8080，方便测试
-        self.bot_api_url = bot_api_url or os.getenv("BOT_API_URL", "http://localhost:8080")
-        self.profile_render_url = profile_render_url or os.getenv("NAGEKI_PROFILE_RENDER_URL", "http://localhost:4200/render/ongeki-profile")
-        self.rating_render_url = rating_render_url or os.getenv("NAGEKI_RATING_RENDER_URL", "http://localhost:4200/render/ongeki-rating")
+        self.bot_api_url = bot_api_url or os.getenv("BOT_API_URL", "https://nageki-net.com")
+        self.profile_render_url = profile_render_url or os.getenv("NAGEKI_PROFILE_RENDER_URL", "https://next.nageki-net.com/render/ongeki-profile")
+        self.rating_render_url = rating_render_url or os.getenv("NAGEKI_RATING_RENDER_URL", "https://next.nageki-net.com/render/ongeki-rating")
+        self.maimai_profile_render_url = maimai_profile_render_url or os.getenv("NAGEKI_MAIMAI_PROFILE_RENDER_URL", "https://next.nageki-net.com/render/maimai2-profile")
+        self.maimai_rating_render_url = maimai_rating_render_url or os.getenv("NAGEKI_MAIMAI_RATING_RENDER_URL", "https://next.nageki-net.com/render/maimai2-rating")
         self.profile_render_theme = (profile_render_theme or os.getenv("NAGEKI_PROFILE_RENDER_THEME", "dark")).strip().lower()
         if self.profile_render_theme not in ("light", "dark"):
             self.profile_render_theme = "dark"
@@ -74,12 +75,6 @@ class NagekiApiClient:
         # CDN URL 不以 / 结尾
         if self.cdn_base_url.endswith("/"):
             self.cdn_base_url = self.cdn_base_url.rstrip("/")
-        
-        # 创建缓存目录
-        if self.cache_dir:
-            os.makedirs(os.path.join(self.cache_dir, "images"), exist_ok=True)
-            os.makedirs(os.path.join(self.cache_dir, "music"), exist_ok=True)
-    
     def _get_headers(self) -> Dict[str, str]:
         """获取请求头（包含认证 token）"""
         headers = {"Content-Type": "application/json"}
@@ -179,8 +174,8 @@ class NagekiApiClient:
         data: Optional[Dict[str, Any]] = None
     ) -> Any:
         """发送QQ机器人API HTTP 请求"""
-        # 确保bot_api_url不以/结尾，测试阶段默认使用localhost:8080
-        base_url = self.bot_api_url.rstrip("/") if self.bot_api_url else "http://localhost:8080"
+        # 确保 bot_api_url 不以 / 结尾。
+        base_url = self.bot_api_url.rstrip("/") if self.bot_api_url else "https://nageki-net.com"
         url = urljoin(base_url + "/", path)
         
         headers = self._get_bot_headers()
@@ -267,8 +262,8 @@ class NagekiApiClient:
             token: JWT Token
             key: 查询键
         """
-        # 使用 bot_api_url 作为基础URL
-        base_url = self.bot_api_url.rstrip("/") if self.bot_api_url else "http://localhost:8080"
+        # 使用线上 API 作为基础URL
+        base_url = self.bot_api_url.rstrip("/") if self.bot_api_url else "https://nageki-net.com"
         url = urljoin(base_url + "/", "api/game/ongeki/general")
         
         # 设置请求头，使用Bearer Token认证
@@ -421,7 +416,7 @@ class NagekiApiClient:
         # logger.debug(f"[图片] 生成封面URL: {url}")
         return url
     
-    async def download_image(self, url: str, save_path: Optional[str] = None, timeout: int = 10) -> bytes:
+    async def download_image(self, url: str, timeout: int = 10) -> bytes:
         """下载图片"""
         timeout_obj = aiohttp.ClientTimeout(total=timeout)
         async with aiohttp.ClientSession(timeout=timeout_obj) as session:
@@ -429,12 +424,6 @@ class NagekiApiClient:
                 async with session.get(url) as resp:
                     resp.raise_for_status()
                     data = await resp.read()
-                    
-                    if save_path:
-                        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-                        with open(save_path, "wb") as f:
-                            f.write(data)
-                    
                     return data
             except Exception as e:
                 logger.warning(f"[图片] 下载失败 URL={url}, Error={e}")
@@ -444,57 +433,20 @@ class NagekiApiClient:
         self,
         music_id: int,
         size: str = "S",
-        cache: bool = True,
         game: str = "ongeki"
     ) -> Optional[bytes]:
-        """获取音乐封面图片（带缓存）"""
+        """从线上 CDN 获取音乐封面图片。"""
         url = self.get_jacket_url(music_id, size, game)
-        
-        if cache and self.cache_dir:
-            cache_path = os.path.join(
-                self.cache_dir,
-                "images",
-                f"{game}_jacket_{music_id}_{size}.webp"
-            )
-            if os.path.exists(cache_path):
-                with open(cache_path, "rb") as f:
-                    return f.read()
-            
-            try:
-                data = await self.download_image(url, cache_path)
-                return data
-            except Exception:
-                return None
         
         try:
             return await self.download_image(url)
         except Exception:
             return None
     
-    def save_music_cache(self, music_list: List[Dict[str, Any]]):
-        """保存音乐列表到本地缓存"""
-        if not self.cache_dir:
-            return
-        
-        cache_path = os.path.join(self.cache_dir, "music", "music_list.json")
-        with open(cache_path, "w", encoding="utf-8") as f:
-            json.dump(music_list, f, ensure_ascii=False, indent=2)
-    
-    def load_music_cache(self) -> Optional[List[Dict[str, Any]]]:
-        """从本地缓存加载音乐列表"""
-        if not self.cache_dir:
-            return None
-        
-        cache_path = os.path.join(self.cache_dir, "music", "music_list.json")
-        if os.path.exists(cache_path):
-            with open(cache_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        return None
-    
     def get_music_by_id(self, music_id: int, music_list: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
         """根据 ID 查找音乐信息"""
         if music_list is None:
-            music_list = self.load_music_cache() or []
+            music_list = []
         
         for music in music_list:
             if music.get("id") == music_id:
@@ -580,7 +532,18 @@ class NagekiApiClient:
                     logger.error(f"[Net API] HTTP错误响应: {status}")
                     logger.error(f"[Net API] 错误响应体: {response_text}")
                 
-                resp.raise_for_status()
+                if status >= 400:
+                    err_msg = f"HTTP Error {status}"
+                    try:
+                        err_json = json.loads(response_text)
+                        if "message" in err_json:
+                            err_msg = err_json["message"]
+                        elif "error" in err_json:
+                            err_msg = err_json["error"]
+                    except Exception:
+                        if response_text:
+                            err_msg = response_text[:200]
+                    raise NagekiApiException(status, err_msg, response_text)
                 
                 # 解析JSON
                 try:
@@ -616,7 +579,18 @@ class NagekiApiClient:
                     logger.error(f"[Net API] HTTP错误响应: {status}")
                     logger.error(f"[Net API] 错误响应体: {response_text}")
 
-                resp.raise_for_status()
+                if status >= 400:
+                    err_msg = f"HTTP Error {status}"
+                    try:
+                        err_json = json.loads(response_text)
+                        if "message" in err_json:
+                            err_msg = err_json["message"]
+                        elif "error" in err_json:
+                            err_msg = err_json["error"]
+                    except Exception:
+                        if response_text:
+                            err_msg = response_text[:200]
+                    raise NagekiApiException(status, err_msg, response_text)
 
                 try:
                     result = json.loads(response_text) if response_text else {}
@@ -769,8 +743,8 @@ class NagekiApiClient:
             token: JWT Token
             key: 查询键
         """
-        # 使用 bot_api_url 作为基础URL
-        base_url = self.bot_api_url.rstrip("/") if self.bot_api_url else "http://localhost:8080"
+        # 使用线上 API 作为基础URL
+        base_url = self.bot_api_url.rstrip("/") if self.bot_api_url else "https://nageki-net.com"
         url = urljoin(base_url + "/", "api/game/ongeki/general")
         
         # 设置请求头，使用Bearer Token认证

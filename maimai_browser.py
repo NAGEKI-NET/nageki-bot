@@ -6,21 +6,21 @@ import os
 from typing import Any, Dict, List, Optional
 
 try:
-    from .browser_fonts import inject_browser_fonts
+    from .browser_fonts import register_browser_fonts, wait_for_browser_fonts
     from .playwright_runtime import get_browser_timeout_ms, launch_playwright_chromium
 except ImportError:
-    from browser_fonts import inject_browser_fonts
+    from browser_fonts import register_browser_fonts, wait_for_browser_fonts
     from playwright_runtime import get_browser_timeout_ms, launch_playwright_chromium
 
 logger = logging.getLogger(__name__)
 
 
 def _get_maimai_profile_render_url() -> str:
-    return os.getenv("NAGEKI_MAIMAI_PROFILE_RENDER_URL", "http://localhost:4200/render/maimai2-profile")
+    return os.getenv("NAGEKI_MAIMAI_PROFILE_RENDER_URL", "https://next.nageki-net.com/render/maimai2-profile")
 
 
 def _get_maimai_rating_render_url() -> str:
-    return os.getenv("NAGEKI_MAIMAI_RATING_RENDER_URL", "http://localhost:4200/render/maimai2-rating")
+    return os.getenv("NAGEKI_MAIMAI_RATING_RENDER_URL", "https://next.nageki-net.com/render/maimai2-rating")
 
 
 def _build_current_user(current_user: Optional[Dict[str, Any]], profile: Dict[str, Any]) -> Dict[str, Any]:
@@ -79,6 +79,7 @@ async def _generate_maimai_profile_browser_image_bytes(
                 },
                 ensure_ascii=False,
             )
+            await register_browser_fonts(page)
             await page.add_init_script(
                 """
                 (() => {
@@ -95,9 +96,9 @@ async def _generate_maimai_profile_browser_image_bytes(
                 })();
                 """.replace("__NAGEKI_INIT_PAYLOAD__", init_payload)
             )
-            render_url = _get_maimai_profile_render_url()
+            render_url = getattr(api_client, "maimai_profile_render_url", None) or _get_maimai_profile_render_url()
             await page.goto(render_url, wait_until="networkidle", timeout=browser_timeout_ms)
-            await inject_browser_fonts(page)
+            await wait_for_browser_fonts(page)
             await page.wait_for_function("window.__NAGEKI_RENDER_READY__ === true", timeout=browser_timeout_ms)
             render_root = page.locator(".maimai2-profile-render")
             await render_root.wait_for(state="visible", timeout=browser_timeout_ms)
@@ -115,6 +116,11 @@ async def _generate_maimai_profile_browser_image_bytes(
                     "height": box["height"],
                 },
             )
+    except Exception as exc:
+        raise RuntimeError(
+            "前端 Maimai Profile 页截图失败，请确认 Playwright Chromium 已安装，"
+            "并且 NAGEKI_MAIMAI_PROFILE_RENDER_URL 指向可访问的前端 /render/maimai2-profile 页面。"
+        ) from exc
     finally:
         if browser:
             await browser.close()
@@ -168,6 +174,7 @@ async def _generate_maimai_rating_browser_image_bytes(
                 },
                 ensure_ascii=False,
             )
+            await register_browser_fonts(page)
             await page.add_init_script(
                 """
                 (() => {
@@ -185,9 +192,9 @@ async def _generate_maimai_rating_browser_image_bytes(
                 })();
                 """.replace("__NAGEKI_INIT_PAYLOAD__", init_payload)
             )
-            render_url = _get_maimai_rating_render_url()
+            render_url = getattr(api_client, "maimai_rating_render_url", None) or _get_maimai_rating_render_url()
             await page.goto(render_url, wait_until="networkidle", timeout=browser_timeout_ms)
-            await inject_browser_fonts(page)
+            await wait_for_browser_fonts(page)
             await page.wait_for_function("window.__NAGEKI_RENDER_READY__ === true", timeout=browser_timeout_ms)
             render_root = page.locator(".maimai2-rating-render")
             await render_root.wait_for(state="visible", timeout=browser_timeout_ms)
@@ -205,6 +212,11 @@ async def _generate_maimai_rating_browser_image_bytes(
                     "height": box["height"],
                 },
             )
+    except Exception as exc:
+        raise RuntimeError(
+            "前端 Maimai Rating 页截图失败，请确认 Playwright Chromium 已安装，"
+            "并且 NAGEKI_MAIMAI_RATING_RENDER_URL 指向可访问的前端 /render/maimai2-rating 页面。"
+        ) from exc
     finally:
         if browser:
             await browser.close()

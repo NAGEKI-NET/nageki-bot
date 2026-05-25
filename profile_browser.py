@@ -5,17 +5,17 @@ import logging
 from typing import Any, Dict
 
 try:
-    from .browser_fonts import inject_browser_fonts
+    from .browser_fonts import register_browser_fonts, wait_for_browser_fonts
     from .playwright_runtime import get_browser_timeout_ms, launch_playwright_chromium
 except ImportError:
-    from browser_fonts import inject_browser_fonts
+    from browser_fonts import register_browser_fonts, wait_for_browser_fonts
     from playwright_runtime import get_browser_timeout_ms, launch_playwright_chromium
 
 logger = logging.getLogger(__name__)
 
 
 def _get_frontend_render_url() -> str:
-    return os.getenv("NAGEKI_PROFILE_RENDER_URL", "http://localhost:4200/render/ongeki-profile")
+    return os.getenv("NAGEKI_PROFILE_RENDER_URL", "https://next.nageki-net.com/render/ongeki-profile")
 
 
 async def generate_profile_browser_image(
@@ -23,7 +23,7 @@ async def generate_profile_browser_image(
     profile: Dict[str, Any],
     api_client,
 ) -> str:
-    # output_path is kept for API compatibility with the Pillow fallback path.
+    # output_path is kept for API compatibility; browser rendering returns base64 directly.
     image_bytes = await generate_profile_browser_image_bytes(profile, api_client)
     encoded = base64.b64encode(image_bytes).decode("ascii")
     return f"base64://{encoded}"
@@ -61,6 +61,7 @@ async def generate_profile_browser_image_bytes(
                 },
                 ensure_ascii=False,
             )
+            await register_browser_fonts(page)
             await page.add_init_script(
                 """
                 (() => {
@@ -87,7 +88,7 @@ async def generate_profile_browser_image_bytes(
             )
             render_url = getattr(api_client, "profile_render_url", None) or _get_frontend_render_url()
             await page.goto(render_url, wait_until="networkidle", timeout=browser_timeout_ms)
-            await inject_browser_fonts(page)
+            await wait_for_browser_fonts(page)
             await page.wait_for_function("window.__NAGEKI_RENDER_READY__ === true", timeout=browser_timeout_ms)
             render_root = page.locator(".ongeki-profile-render")
             await render_root.wait_for(state="visible", timeout=browser_timeout_ms)

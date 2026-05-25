@@ -11,8 +11,8 @@ _install_lock: Optional[asyncio.Lock] = None
 
 
 def _auto_install_enabled() -> bool:
-    value = os.getenv("NAGEKI_PLAYWRIGHT_AUTO_INSTALL", "true").strip().lower()
-    return value not in {"0", "false", "no", "off"}
+    value = os.getenv("NAGEKI_PLAYWRIGHT_AUTO_INSTALL", "false").strip().lower()
+    return value in {"1", "true", "yes", "on"}
 
 
 def _install_timeout() -> int:
