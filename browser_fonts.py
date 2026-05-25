@@ -199,8 +199,16 @@ async def auto_fit_viewport(page, selector: str, padding: int = 8):
     """根据真实内容尺寸把 viewport 拉大（不缩小），避免内容超出 viewport 被截掉。
 
     返回最终用于 clip 的 bounding box；调用方在 tighten_render_layout 之后调用。
+
+    优先用 locator.bounding_box()（单次 layout），失败再退到扫描所有后代。
     """
-    box = await compute_content_bounding_box(page, selector)
+    locator = page.locator(selector).first
+    try:
+        box = await locator.bounding_box()
+    except Exception:
+        box = None
+    if not box:
+        box = await compute_content_bounding_box(page, selector)
     if not box:
         return None
     current = page.viewport_size
@@ -208,6 +216,7 @@ async def auto_fit_viewport(page, selector: str, padding: int = 8):
         return box
     target_w = max(int(box["x"] + box["width"]) + padding, current["width"])
     target_h = max(int(box["y"] + box["height"]) + padding, current["height"])
+    # 内容已在 viewport 范围内，无须再 resize/reflow
     if target_w == current["width"] and target_h == current["height"]:
         return box
     try:
@@ -216,7 +225,10 @@ async def auto_fit_viewport(page, selector: str, padding: int = 8):
     except Exception as exc:
         logger.debug("[浏览器截图] 调整 viewport 失败，忽略: %s", exc)
         return box
-    return await compute_content_bounding_box(page, selector) or box
+    try:
+        return await locator.bounding_box() or box
+    except Exception:
+        return box
 
 
 async def compute_content_bounding_box(page, selector: str):

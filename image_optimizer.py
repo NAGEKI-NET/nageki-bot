@@ -31,9 +31,17 @@ def _format() -> str:
 
 def _webp_quality() -> int:
     try:
-        return max(50, min(100, int(os.getenv("NAGEKI_IMAGE_WEBP_QUALITY", "88"))))
+        return max(50, min(100, int(os.getenv("NAGEKI_IMAGE_WEBP_QUALITY", "82"))))
     except ValueError:
-        return 88
+        return 82
+
+
+def _max_width() -> int:
+    """超过此宽度的截图会等比缩到该宽度再编码；设 0 关闭。默认 1280。"""
+    try:
+        return max(0, int(os.getenv("NAGEKI_IMAGE_MAX_WIDTH", "1280")))
+    except ValueError:
+        return 1280
 
 
 def _webp_method() -> int:
@@ -78,6 +86,16 @@ def compress_screenshot_bytes(png_bytes: bytes, format_override: Optional[str] =
     try:
         with Image.open(io.BytesIO(png_bytes)) as img:
             img.load()
+            # 等比下采样，降低发送字节
+            max_w = _max_width()
+            if max_w and img.width > max_w:
+                ratio = max_w / img.width
+                new_size = (max_w, max(1, int(round(img.height * ratio))))
+                try:
+                    resample = Image.Resampling.LANCZOS  # Pillow >= 9.1
+                except AttributeError:
+                    resample = Image.LANCZOS
+                img = img.resize(new_size, resample=resample)
             if fmt == "webp":
                 buf = io.BytesIO()
                 if img.mode not in ("RGBA", "RGB", "LA", "L"):
