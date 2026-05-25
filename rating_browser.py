@@ -30,7 +30,10 @@ except ImportError:
     from image_optimizer import compress_screenshot_bytes
     from playwright_runtime import get_browser_timeout_ms
 
-logger = logging.getLogger(__name__)
+try:
+    from astrbot.api import logger  # AstrBot 主日志流
+except ImportError:
+    logger = logging.getLogger(__name__)
 
 
 def _get_frontend_render_url() -> str:

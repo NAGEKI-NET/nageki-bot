@@ -34,7 +34,10 @@ except ImportError:
         get_browser_timeout_ms,
     )
 
-logger = logging.getLogger(__name__)
+try:
+    from astrbot.api import logger
+except ImportError:
+    logger = logging.getLogger(__name__)
 
 
 _lock = asyncio.Lock()
