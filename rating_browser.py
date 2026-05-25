@@ -141,7 +141,7 @@ async def generate_rating_browser_image_bytes(
                 """.replace("__NAGEKI_INIT_PAYLOAD__", init_payload)
             )
             render_url = getattr(api_client, "rating_render_url", None) or _get_frontend_render_url()
-            await page.goto(render_url, wait_until="load", timeout=browser_timeout_ms)
+            await page.goto(render_url, wait_until="domcontentloaded", timeout=browser_timeout_ms)
             await wait_for_browser_fonts(page)
             await page.wait_for_function("window.__NAGEKI_RENDER_READY__ === true", timeout=browser_timeout_ms)
             render_selector = (

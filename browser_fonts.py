@@ -1,11 +1,22 @@
 import base64
 import json
 import logging
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _bundled_fonts_enabled() -> bool:
+    """是否往页面注入插件自带字体（约 26MB base64）。
+
+    默认 false：依赖宿主机/容器内系统字体（fc-list 能看到的）。
+    若部署环境确实没有 CJK 字体，把 NAGEKI_USE_BUNDLED_FONTS=true 打开。
+    """
+    value = os.getenv("NAGEKI_USE_BUNDLED_FONTS", "false").strip().lower()
+    return value in {"1", "true", "yes", "on"}
 
 
 _FONT_STACK = (
@@ -84,7 +95,12 @@ select,
 
 
 async def register_browser_fonts(page) -> None:
-    """在导航前通过 init script 注入 @font-face，让首屏渲染就能用上内置字体。"""
+    """在导航前通过 init script 注入 @font-face，让首屏渲染就能用上内置字体。
+
+    默认跳过，依赖系统字体；通过 NAGEKI_USE_BUNDLED_FONTS=true 启用注入。
+    """
+    if not _bundled_fonts_enabled():
+        return
     css = get_browser_font_css()
     if not css:
         logger.warning("[浏览器截图] 未加载到内置字体，继续使用系统字体。")
@@ -130,6 +146,8 @@ async def wait_for_browser_fonts(page) -> None:
 
 async def inject_browser_fonts(page) -> None:
     """向后兼容：等价于 register + wait，但用于已经 goto 完成的场景。"""
+    if not _bundled_fonts_enabled():
+        return
     css = get_browser_font_css()
     if not css:
         logger.warning("[浏览器截图] 未加载到内置字体，继续使用系统字体。")
