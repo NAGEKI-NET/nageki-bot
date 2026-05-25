@@ -17,6 +17,8 @@
 import asyncio
 import logging
 import os
+import time
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, Optional
@@ -132,6 +134,57 @@ async def _ensure_context():
         return _context
 
 
+def _debug_requests_enabled() -> bool:
+    value = os.getenv("NAGEKI_BROWSER_DEBUG_REQUESTS", "false").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _attach_request_logging(page) -> None:
+    """打开后会把页面所有网络请求按 host 聚合输出，方便定位是哪类资源拖慢。
+
+    通过 NAGEKI_BROWSER_DEBUG_REQUESTS=1 启用。
+    """
+    if not _debug_requests_enabled():
+        return
+
+    host_count: Dict[str, int] = defaultdict(int)
+    host_time: Dict[str, float] = defaultdict(float)
+    pending: Dict[str, float] = {}
+    started = time.monotonic()
+
+    def on_request(request):
+        pending[request.url] = time.monotonic()
+
+    def on_request_finished(request):
+        url = request.url
+        start = pending.pop(url, None)
+        if start is None:
+            return
+        dur = time.monotonic() - start
+        try:
+            from urllib.parse import urlparse
+            host = urlparse(url).netloc or "<unknown>"
+        except Exception:
+            host = "<unknown>"
+        host_count[host] += 1
+        host_time[host] += dur
+
+    def on_close(_):
+        total = time.monotonic() - started
+        if not host_count:
+            return
+        lines = [f"  {h}: {host_count[h]} reqs, {host_time[h]*1000:.0f} ms total" for h in sorted(host_count)]
+        logger.info(
+            "[浏览器截图] 网络统计(总 %.2fs):\n%s",
+            total,
+            "\n".join(lines),
+        )
+
+    page.on("request", on_request)
+    page.on("requestfinished", on_request_finished)
+    page.on("close", on_close)
+
+
 @asynccontextmanager
 async def shared_browser_page(viewport: Dict[str, int], device_scale_factor: int = 1):
     """从共享 Context 取一个新 Page；并发由信号量串行，Context 常驻不关。
@@ -147,6 +200,7 @@ async def shared_browser_page(viewport: Dict[str, int], device_scale_factor: int
         try:
             ctx = await _ensure_context()
             page = await ctx.new_page()
+            _attach_request_logging(page)
             await page.set_viewport_size(viewport)
             timeout_ms = get_browser_timeout_ms()
             page.set_default_timeout(timeout_ms)

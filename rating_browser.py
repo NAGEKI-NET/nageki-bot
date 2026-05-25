@@ -4,6 +4,7 @@ import json
 import math
 import os
 import logging
+import time
 from typing import Any, Dict, List
 
 try:
@@ -141,15 +142,27 @@ async def generate_rating_browser_image_bytes(
                 """.replace("__NAGEKI_INIT_PAYLOAD__", init_payload)
             )
             render_url = getattr(api_client, "rating_render_url", None) or _get_frontend_render_url()
+
+            phases = []
+            def _mark(name, t0):
+                dt = time.monotonic() - t0
+                phases.append((name, dt))
+                return time.monotonic()
+
+            t0 = time.monotonic()
             await page.goto(render_url, wait_until="domcontentloaded", timeout=browser_timeout_ms)
+            t0 = _mark("goto(domcontentloaded)", t0)
             await wait_for_browser_fonts(page)
+            t0 = _mark("fonts.ready", t0)
             await page.wait_for_function("window.__NAGEKI_RENDER_READY__ === true", timeout=browser_timeout_ms)
+            t0 = _mark("__NAGEKI_RENDER_READY__", t0)
             render_selector = (
                 ".ongeki-rating-render, .rating-render, "
                 "[data-nageki-render='ongeki-rating'], [data-render='ongeki-rating']"
             )
             render_root = page.locator(render_selector).first
             await render_root.wait_for(state="visible", timeout=browser_timeout_ms)
+            t0 = _mark("render_root.visible", t0)
             await tighten_render_layout(page)
             box = await auto_fit_viewport(page, render_selector)
             if not box:
@@ -158,18 +171,25 @@ async def generate_rating_browser_image_bytes(
                 box = await render_root.bounding_box()
             if not box:
                 raise RuntimeError("前端 Rating 页截图区域不可用。")
+            t0 = _mark("tighten+fit", t0)
             clip = {
                 "x": math.floor(box["x"]),
                 "y": math.floor(box["y"]),
                 "width": math.ceil(box["width"]),
                 "height": math.ceil(box["height"]),
             }
-            return await page.screenshot(
+            png_bytes = await page.screenshot(
                 type="png",
                 omit_background=True,
                 timeout=browser_timeout_ms,
                 clip=clip,
             )
+            t0 = _mark("screenshot", t0)
+            logger.info(
+                "[Rating 截图耗时] %s",
+                ", ".join(f"{n}={d*1000:.0f}ms" for n, d in phases),
+            )
+            return png_bytes
     except Exception as exc:
         raise RuntimeError(
             "前端 Rating 页截图失败，请确认 Playwright Chromium 已安装，"
