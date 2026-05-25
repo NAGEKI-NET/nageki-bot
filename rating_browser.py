@@ -14,6 +14,7 @@ try:
         register_browser_fonts,
         tighten_render_layout,
         wait_for_browser_fonts,
+        wait_for_network_settle,
         wait_for_render_images,
     )
     from .browser_pool import shared_browser_page
@@ -26,6 +27,7 @@ except ImportError:
         register_browser_fonts,
         tighten_render_layout,
         wait_for_browser_fonts,
+        wait_for_network_settle,
         wait_for_render_images,
     )
     from browser_pool import shared_browser_page
@@ -161,6 +163,8 @@ async def generate_rating_browser_image_bytes(
             t0 = _mark("fonts.ready", t0)
             await page.wait_for_function("window.__NAGEKI_RENDER_READY__ === true", timeout=browser_timeout_ms)
             t0 = _mark("__NAGEKI_RENDER_READY__", t0)
+            await wait_for_network_settle(page)
+            t0 = _mark("network.settle", t0)
             render_selector = (
                 ".ongeki-rating-render, .rating-render, "
                 "[data-nageki-render='ongeki-rating'], [data-render='ongeki-rating']"

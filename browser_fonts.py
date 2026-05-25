@@ -195,6 +195,17 @@ async def tighten_render_layout(page) -> None:
         logger.debug("[浏览器截图] 收紧渲染容器尺寸失败，忽略: %s", exc)
 
 
+async def wait_for_network_settle(page, timeout_ms: int = 15000) -> None:
+    """等到网络空闲再继续，处理前端 __NAGEKI_RENDER_READY__ 比 API 早置位的情况。
+
+    超时（默认 15s）即放过，不阻塞太久。
+    """
+    try:
+        await page.wait_for_load_state("networkidle", timeout=timeout_ms)
+    except Exception as exc:
+        logger.debug("[浏览器截图] 等待网络空闲超时/失败，忽略: %s", exc)
+
+
 async def wait_for_render_images(page, selector: str, per_image_timeout_ms: int = 5000) -> None:
     """等 selector 范围内所有 <img> 加载完成，避免在 jacket 图还没下完时就截图。
 
