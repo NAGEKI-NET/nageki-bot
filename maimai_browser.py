@@ -15,6 +15,7 @@ try:
         wait_for_browser_fonts,
     )
     from .browser_pool import shared_browser_page
+    from .image_optimizer import compress_screenshot_bytes
     from .playwright_runtime import get_browser_timeout_ms
 except ImportError:
     from browser_fonts import (
@@ -25,6 +26,7 @@ except ImportError:
         wait_for_browser_fonts,
     )
     from browser_pool import shared_browser_page
+    from image_optimizer import compress_screenshot_bytes
     from playwright_runtime import get_browser_timeout_ms
 
 logger = logging.getLogger(__name__)
@@ -100,6 +102,7 @@ async def generate_maimai_profile_browser_image(
     current_user: Optional[Dict[str, Any]] = None,
 ) -> str:
     image_bytes = await _generate_maimai_profile_browser_image_bytes(profile, api_client, current_user)
+    image_bytes = compress_screenshot_bytes(image_bytes)
     encoded = base64.b64encode(image_bytes).decode("ascii")
     return f"base64://{encoded}"
 
@@ -190,6 +193,7 @@ async def generate_maimai_rating_browser_image(
     current_user: Optional[Dict[str, Any]] = None,
 ) -> str:
     image_bytes = await _generate_maimai_rating_browser_image_bytes(profile, categories, api_client, current_user)
+    image_bytes = compress_screenshot_bytes(image_bytes)
     encoded = base64.b64encode(image_bytes).decode("ascii")
     return f"base64://{encoded}"
 
