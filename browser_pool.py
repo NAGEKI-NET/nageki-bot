@@ -106,6 +106,15 @@ _LEAN_CHROMIUM_ARGS = (
 )
 
 
+def _detect_proxy_arg() -> Optional[str]:
+    """依次读取 HTTPS_PROXY / https_proxy / HTTP_PROXY / http_proxy，返回 --proxy-server 参数或 None。"""
+    for var in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        proxy = os.getenv(var, "").strip()
+        if proxy:
+            return f"--proxy-server={proxy}"
+    return None
+
+
 def _context_alive() -> bool:
     if _context is None:
         return False
@@ -131,9 +140,14 @@ async def _ensure_context():
 
         try:
             locale = _browser_locale()
+            launch_args = list(_LEAN_CHROMIUM_ARGS)
+            proxy_arg = _detect_proxy_arg()
+            if proxy_arg:
+                launch_args.append(proxy_arg)
+                logger.info("[浏览器截图] 检测到代理环境变量，已添加: %s", proxy_arg)
             _context = await _playwright_ctx.chromium.launch_persistent_context(
                 user_data_dir=str(_user_data_dir()),
-                args=list(_LEAN_CHROMIUM_ARGS),
+                args=launch_args,
                 chromium_sandbox=False,
                 timeout=get_browser_timeout_ms(),
                 locale=locale,

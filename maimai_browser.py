@@ -128,8 +128,19 @@ async def _generate_maimai_profile_browser_image_bytes(
         ) from exc
 
     browser_timeout_ms = get_browser_timeout_ms()
+    _page_errors = []
     try:
         async with shared_browser_page(viewport={"width": 1600, "height": 1280}) as page:
+            # 页面诊断监听
+            def _on_page_error(error):
+                _page_errors.append(f"[pageerror] {error}")
+
+            def _on_crash():
+                _page_errors.append("[crash] 页面进程崩溃")
+
+            page.on("pageerror", _on_page_error)
+            page.on("crash", _on_crash)
+
             init_payload = json.dumps(
                 {
                     "profile": profile,
@@ -188,9 +199,18 @@ async def _generate_maimai_profile_browser_image_bytes(
                 },
             )
     except Exception as exc:
+        diag_info = ""
+        if _page_errors:
+            diag_info = " | 页面诊断: " + "; ".join(_page_errors[-5:])
+        logger.error(
+            "[Maimai Profile 截图失败] %s%s",
+            str(exc),
+            diag_info,
+        )
         raise RuntimeError(
             "前端 Maimai Profile 页截图失败，请确认 Playwright Chromium 已安装，"
             "并且 NAGEKI_MAIMAI_PROFILE_RENDER_URL 指向可访问的前端 /render/maimai2-profile 页面。"
+            + diag_info
         ) from exc
 
 
@@ -222,8 +242,19 @@ async def _generate_maimai_rating_browser_image_bytes(
         ) from exc
 
     browser_timeout_ms = get_browser_timeout_ms()
+    _page_errors = []
     try:
         async with shared_browser_page(viewport={"width": 1600, "height": 2600}) as page:
+            # 页面诊断监听
+            def _on_page_error(error):
+                _page_errors.append(f"[pageerror] {error}")
+
+            def _on_crash():
+                _page_errors.append("[crash] 页面进程崩溃")
+
+            page.on("pageerror", _on_page_error)
+            page.on("crash", _on_crash)
+
             init_payload = json.dumps(
                 {
                     "profile": profile,
@@ -284,7 +315,16 @@ async def _generate_maimai_rating_browser_image_bytes(
                 },
             )
     except Exception as exc:
+        diag_info = ""
+        if _page_errors:
+            diag_info = " | 页面诊断: " + "; ".join(_page_errors[-5:])
+        logger.error(
+            "[Maimai Rating 截图失败] %s%s",
+            str(exc),
+            diag_info,
+        )
         raise RuntimeError(
             "前端 Maimai Rating 页截图失败，请确认 Playwright Chromium 已安装，"
             "并且 NAGEKI_MAIMAI_RATING_RENDER_URL 指向可访问的前端 /render/maimai2-rating 页面。"
+            + diag_info
         ) from exc
